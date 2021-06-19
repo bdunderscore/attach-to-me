@@ -261,7 +261,7 @@ namespace net.fushizen.attachable
                 boneLength = limitHi;
             }
 
-            boneDistance = Vector3.Distance(nearestPointRay, nearestPointBone);
+            boneDistance = Vector3.Distance(raySource, nearestPointRay) + Vector3.Distance(nearestPointRay, nearestPointBone);
             selectedBoneRoot = bonePos;
             selectedBoneChildPos = childPos;
 
@@ -568,9 +568,9 @@ namespace net.fushizen.attachable
 
             if ((Time.frameCount % 100) == 0)
             {
-                var elapsed = sw.ElapsedTicks / System.Diagnostics.Stopwatch.Frequency;
+                var elapsed = (double)sw.ElapsedTicks / (double)System.Diagnostics.Stopwatch.Frequency;
 
-                Debug.Log($"Bone search elapsed: {elapsed / 1000000.0:F6} uS");
+                Debug.Log($"Bone search elapsed: {sw.ElapsedTicks} ticks {sw.Elapsed.TotalMilliseconds:F4} ms {sw.Elapsed.TotalMilliseconds * 1000.0:F6} uS");
             }
         }
 
