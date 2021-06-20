@@ -37,5 +37,10 @@ namespace net.fushizen.attachable
         {
             a._a_PreRender();
         }
+
+        public override void OnOwnershipTransferred(VRCPlayerApi player)
+        {
+            Networking.SetOwner(player, a.gameObject);
+        }
     }
 }

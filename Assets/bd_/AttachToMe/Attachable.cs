@@ -39,7 +39,7 @@ namespace net.fushizen.attachable
     public class Attachable : UdonSharpBehaviour
     {
         #region Editor configuration
-        public Transform t_pickup, t_objectSync, t_boneProxy;
+        public Transform t_pickup, t_boneProxy;
 
         public Transform t_boneSelectorModel, t_boneRootModel;
         Material mat_bone;
@@ -327,15 +327,7 @@ namespace net.fushizen.attachable
             updateLoop = GetComponent<UpdateLoop>();
             updateLoop.enabled = false;
 
-            SendCustomEventDelayedSeconds("_a_PeriodicUpdate", Random.Range(1f, 2f)); // XXX hack
-
-            SetState(ST_NOT_ATTACHED);
-        }
-
-        public void _a_PeriodicUpdate()
-        {
-            _a_Update();
-            SendCustomEventDelayedSeconds("_a_PeriodicUpdate", Random.Range(1f, 2f)); // XXX hack
+            ApplyState();
         }
 
         #region Synced data
@@ -359,114 +351,121 @@ namespace net.fushizen.attachable
 
         #region State management and bone position update loop
 
-        void ParentAndZero(Transform parent, Transform child)
+        public override void OnOwnershipTransferred(VRCPlayerApi newOwner)
         {
-            child.SetParent(parent);
-            child.localPosition = Vector3.zero;
-            child.localRotation = Quaternion.identity;
+            ApplyState();
         }
 
-        void SetState(int state)
+        bool checkHeldActive;
+
+        public void _CheckHeld()
         {
-            this.state = state;
-
-            if (Networking.IsOwner(pickup.gameObject))
-            {
-                Networking.SetOwner(Networking.LocalPlayer, t_objectSync.gameObject);
-                Networking.SetOwner(Networking.LocalPlayer, gameObject);
-            }
-
-            // Avoid reparenting pickups while in a pickup callback
-            SendCustomEventDelayedFrames("_ApplyState", 1);
+            checkHeldActive = false;
+            ApplyState();
         }
 
-        public void _ApplyState() {
-            Debug.Log("=== Begin apply ===");
-            switch (state)
+        public void ApplyState() {
+            var currentHolder = pickup.currentPlayer;
+
+            bool enable_update;
+            bool enable_prerender;
+
+            if (Utilities.IsValid(currentHolder))
             {
-                case 0: // ST_NOT_ATTACHED
+                // Do not sync to the bone
+                t_pickup.parent = transform;
 
-                    updateLoop.enabled = false;
-                    t_objectSync.parent = transform;
-                    t_objectSync.position = t_pickup.position;
-
+                if (currentHolder.isLocal)
+                {
+                    Debug.Log("ApplyState: Active holder is local");
+                    enable_update = true;
+                } else 
+                {
+                    Debug.Log("ApplyState: Active holder is remote");
                     t_boneRootModel.gameObject.SetActive(false);
-
-                    ParentAndZero(t_objectSync, t_pickup);
-
                     markClosestPoint.gameObject.SetActive(false);
+                    enable_update = false;
 
-                    break;
-                case 1: // ST_ATTACHED
-                    updateLoop.enabled = true;
-                    _a_UpdateAttached();
+                    if (!checkHeldActive)
+                    {
+                        checkHeldActive = true;
+                        SendCustomEventDelayedSeconds("_CheckHeld", 0.25f);
+                    }
+                }
+                enable_prerender = false;
+            } else if (tracking)
+            {
+                Debug.Log("ApplyState: Tracking");
+                // Sync to the bone
+                UpdateBoneProxy();
 
-                    ParentAndZero(t_boneProxy, t_pickup);
-                    t_pickup.localRotation = rotationOffset;
-                    t_pickup.localPosition = positionOffset;
+                // Reparent preserving world position
+                t_pickup.parent = t_boneProxy;
 
-                    t_boneRootModel.gameObject.SetActive(false);
+                // If the synced values are for a non-held state, we can apply them (they should be up to date, or will be soon)
+                ApplyOffsets();
 
-                    markClosestPoint.gameObject.SetActive(false);
+                enable_update = true;
+                enable_prerender = true;
+            } else
+            {
+                Debug.Log("ApplyState: Not tracking");
+                // Not tracking.
+                t_pickup.parent = transform;
 
-                    ParentAndZero(t_pickup, t_objectSync);
-                    break;
-                case 2: // ST_HELD
-                    t_pickup.parent = transform;
-
-                    updateLoop.enabled = true;
-
-                    markClosestPoint.gameObject.SetActive(true);
-
-                    ParentAndZero(t_pickup, t_objectSync);
-                    break;
-                case 3: // ST_HELD_REMOTE
-                    t_pickup.parent = transform;
-
-                    updateLoop.enabled = true;
-                    t_boneRootModel.gameObject.SetActive(false);
-
-                    ParentAndZero(t_pickup, t_objectSync);
-                    break;
+                enable_update = false;
+                enable_prerender = false;
             }
-
-            mr_pickup_proxy.enabled = (state == ST_ATTACHED);
-
-            Debug.Log("=== End apply ===");
+            
+            mr_pickup_proxy.enabled = enable_prerender;
+            updateLoop.enabled = enable_update;
         }
 
         public void _a_Update()
         {
-            switch (state)
+            var currentHolder = pickup.currentPlayer;
+            if (Utilities.IsValid(currentHolder))
             {
-                case 0: // ST_NOT_ATTACHED:
-                    updateLoop.enabled = false;
-                    break;
-                case 2: //ST_HELD:
+                if (currentHolder.isLocal)
+                {
                     UpdateHeld();
-                    break;
-                case 1: //ST_ATTACHED:
-                    _a_UpdateAttached();
-                    break;
-
-                    // No update for ST_HELD_REMOTE
+                }
+            } else if (tracking)
+            {
+                UpdateBoneProxy();
+                ApplyOffsets();
+            } else
+            {
+                // Error state
+                ApplyState();
             }
         }
 
         public void _a_PreRender()
         {
             // Adjust position just before rendering to fix up FinalIK weirdness
-            if (state == ST_ATTACHED) _a_UpdateAttached();
+            UpdateBoneProxy();
+            ApplyOffsets();
         }
 
-        void _a_UpdateAttached()
+        void ApplyOffsets()
         {
+            Debug.Log($"ApplyOffsets: HS={heldSynced}");
+            if (!heldSynced)
+            {
+                t_pickup.localPosition = positionOffset;
+                t_pickup.localRotation = rotationOffset;
+            }
+        }
 
+        void UpdateBoneProxy()
+        {
             VRCPlayerApi player = VRCPlayerApi.GetPlayerById(trackingPlayerId);
             if (player == null || !Utilities.IsValid(player) || trackingBoneId < 0 || trackingBoneId >= bone_targets.Length)
             {
                 if (!Networking.IsOwner(gameObject)) return;
-                SetState(ST_NOT_ATTACHED);
+                tracking = false;
+                RequestSerialization();
                 return;
             }
 
@@ -475,7 +474,9 @@ namespace net.fushizen.attachable
 
             if (bonePos.sqrMagnitude < 0.001)
             {
-                SetState(ST_NOT_ATTACHED);
+                if (!Networking.IsOwner(gameObject)) return;
+                tracking = false;
+                RequestSerialization();
                 return;
             }
 
@@ -488,7 +489,10 @@ namespace net.fushizen.attachable
 
         public override void OnDeserialization()
         {
-            Debug.Log("===== DESERIALIZE =====");
+            var holder = pickup.currentPlayer;
+            var holderName = Utilities.IsValid(holder) ? $"{holder.playerId}" : "<none>";
+
+            Debug.Log($"OnDS: t={tracking} hs={heldSynced} ch={holderName}");
             var curHolder = pickup.currentPlayer;
             if (curHolder != null && curHolder.isLocal)
             {
@@ -496,16 +500,7 @@ namespace net.fushizen.attachable
                 _a_OnPickup();
             } else
             {
-                if (tracking)
-                {
-                    t_pickup.localRotation = rotationOffset;
-                    t_pickup.localPosition = positionOffset;
-                }
-
-                if (tracking != (state == ST_ATTACHED))
-                {
-                    SetState(tracking ? ST_ATTACHED : ST_NOT_ATTACHED);
-                }
+                ApplyState();
             }
         }
 
@@ -515,7 +510,7 @@ namespace net.fushizen.attachable
             {
                 // Something has gone terribly wrong, reset.
                 heldSynced = tracking = false;
-                SetState(ST_NOT_ATTACHED);
+                ApplyState();
             }
         }
 
@@ -658,9 +653,9 @@ namespace net.fushizen.attachable
 
         public void _a_OnPickup()
         {
+            Debug.Log($"OnPickup o={Networking.IsOwner(pickup.gameObject)} t={tracking} cp={Networking.GetOwner(pickup.gameObject).playerId}/{pickup.currentPlayer.playerId}");
             if (Networking.IsOwner(pickup.gameObject))
             {
-                SetState(ST_HELD_LOCAL);
                 heldSynced = true;
 
                 Networking.SetOwner(Networking.LocalPlayer, gameObject);
@@ -674,35 +669,29 @@ namespace net.fushizen.attachable
 
                 // Suppress the desktop trigger-press-on-pickup
                 trigger_wasHeld[0] = trigger_wasHeld[1] = true;
-            } else
-            {
-                SetState(ST_HELD_REMOTE);
             }
+
+            // Apply locally immediately (offset one frame to avoid breaking pickups) but also RPC it off to everyone else
+            // XXX: can this arrive before the pickup state updates? [answer: yes, and it's a problem]
+            SendCustomEventDelayedFrames("ApplyState", 1);
+            SendCustomNetworkEvent(VRC.Udon.Common.Interfaces.NetworkEventTarget.All, "ApplyState");
         }
 
         public void _a_OnDrop()
         {
+            Debug.Log("=== OnDrop");
             if (tracking)
             {
-                _a_UpdateAttached(); //; update bone proxy
+                UpdateBoneProxy(); // update bone proxy
 
-                // If we're not owner, and the owner hasn't replicated the ondrop event, predict the transform values
-                var isOwner = Networking.IsOwner(gameObject);
-                if (isOwner || heldSynced)
-                {
-                    positionOffset = t_boneProxy.InverseTransformPoint(t_pickup.position);
-                    rotationOffset = Quaternion.Inverse(t_boneProxy.rotation) * t_pickup.rotation;
+                positionOffset = t_boneProxy.InverseTransformPoint(t_pickup.position);
+                rotationOffset = Quaternion.Inverse(t_boneProxy.rotation) * t_pickup.rotation;
 
-                    if (isOwner)
-                    {
-                        heldSynced = false;
-                        RequestSerialization();
-                    }
-                }
-                
+                heldSynced = false;
             } else
             {
                 trackingPlayerId = -1;
+                trackingBoneId = -1;
             }
 
             if (Networking.IsOwner(pickup.gameObject))
@@ -711,7 +700,10 @@ namespace net.fushizen.attachable
                 RequestSerialization();
             }
 
-            SetState(tracking ? ST_ATTACHED : ST_NOT_ATTACHED);
+            Debug.Log($"OnDrop: HS={heldSynced}");
+
+            SendCustomEventDelayedFrames("ApplyState", 1);
+            SendCustomNetworkEvent(VRC.Udon.Common.Interfaces.NetworkEventTarget.All, "ApplyState");
         }
 
         void DisplayBoneModel(VRCPlayerApi target)
@@ -938,8 +930,6 @@ namespace net.fushizen.attachable
 
         void CheckInput()
         {
-            if (state != ST_HELD_LOCAL) return;
-
             bool boneSelectTrigger, userSelectTrigger;
 
             if (Networking.LocalPlayer.IsUserInVR())
