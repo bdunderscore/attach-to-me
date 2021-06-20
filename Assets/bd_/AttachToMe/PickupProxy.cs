@@ -33,23 +33,9 @@ namespace net.fushizen.attachable
             a._a_OnPickup();
         }
 
-
-        public override void OnPickupUseUp()
+        private void OnPreRender()
         {
-            Debug.Log("===> Use UP");
-            suppressUseTime = -1;
-        }
-
-        public override void OnPickupUseDown()
-        {
-            Debug.Log("===> Use DOWN");
-            if (Time.timeSinceLevelLoad < suppressUseTime + .5f)
-            {
-                suppressUseTime = Time.timeSinceLevelLoad;
-                return;
-            }
-
-            a._a_Commit();
+            a._a_PreRender();
         }
     }
 }

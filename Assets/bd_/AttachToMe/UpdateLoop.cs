@@ -19,10 +19,5 @@ namespace net.fushizen.attachable
         {
             a._a_Update();
         }
-
-        private void OnPreRender()
-        {
-            a._a_PreRender();
-        }
     }
 }

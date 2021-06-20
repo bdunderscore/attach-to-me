@@ -3,6 +3,7 @@ using UdonSharp;
 using UnityEngine;
 using VRC.SDKBase;
 using VRC.Udon;
+using VRC.Udon.Common;
 
 namespace net.fushizen.attachable
 {
@@ -41,8 +42,12 @@ namespace net.fushizen.attachable
         public Transform t_pickup, t_objectSync, t_boneProxy;
 
         public Transform t_boneSelectorModel, t_boneRootModel;
+        Material mat_bone;
+        MeshRenderer mr_pickup_proxy;
 
         public float range;
+
+        public bool preferSelf;
 
         #endregion
 
@@ -51,7 +56,8 @@ namespace net.fushizen.attachable
 
         readonly int ST_NOT_ATTACHED = 0;
         readonly int ST_ATTACHED = 1;
-        readonly int ST_HELD = 2;
+        readonly int ST_HELD_LOCAL = 2;
+        readonly int ST_HELD_REMOTE = 3;
 
         int state;
 
@@ -59,10 +65,10 @@ namespace net.fushizen.attachable
 
         #region Input state
 
-        float t_same_hand_held;
-        float t_other_hand_held;
+        bool[] trigger_wasHeld;
+        float trigger_sameHand_lastChange;
 
-        VRC_Pickup.PickupHand holdingHand;
+        float lastBoneScan;
 
         #endregion
 
@@ -109,8 +115,8 @@ namespace net.fushizen.attachable
             bone_targets[last = 14] = HumanBodyBones.RightUpperArm; bone_parent[last] = last - 2; bone_child[last] = last + 2;
             bone_targets[last = 15] = HumanBodyBones.LeftLowerArm; bone_parent[last] = last - 2; bone_child[last] = last + 2;
             bone_targets[last = 16] = HumanBodyBones.RightLowerArm; bone_parent[last] = last - 2; bone_child[last] = last + 2;
-            bone_targets[last = 17] = HumanBodyBones.LeftHand; bone_parent[last] = last - 2; bone_child[last] = -2;
-            bone_targets[last = 18] = HumanBodyBones.RightHand; bone_parent[last] = last - 2; bone_child[last] = -2;
+            bone_targets[last = 17] = HumanBodyBones.LeftHand; bone_parent[last] = last - 2; bone_child[last] = 25; // middle finger
+            bone_targets[last = 18] = HumanBodyBones.RightHand; bone_parent[last] = last - 2; bone_child[last] = 40;
             bone_targets[last = 19] = HumanBodyBones.LeftThumbProximal; bone_parent[last] = 17;
             bone_targets[last = 20] = HumanBodyBones.LeftThumbIntermediate;
             bone_targets[last = 21] = HumanBodyBones.LeftThumbDistal; bone_child[last] = -1;
@@ -150,6 +156,16 @@ namespace net.fushizen.attachable
         float boneDistance;
         Vector3 nearestPointBone, nearestPointRay, selectedBoneRoot, selectedBoneChildPos;
         float boneLength;
+        bool boneHasChild;
+
+        float PointDistanceToInfiniteLine(Vector3 probe, Vector3 raySource, Vector3 rayDirection)
+        {
+            Vector3 ac = probe - raySource;
+            Vector3 ab = rayDirection;
+
+            return Vector3.Dot(ac, ab) / ab.sqrMagnitude;
+        }
+
 
         Vector3 NearestPointToSphere(Vector3 target, Vector3 raySource, Vector3 rayDirection)
         {
@@ -160,6 +176,86 @@ namespace net.fushizen.attachable
             float t = initialDeriv / (-deltaTime);
 
             return raySource + t * rayDirection;
+        }
+
+        bool ComputeBonePosition(VRCPlayerApi player, int targetIndex)
+        {
+            if (targetIndex < 0 || targetIndex >= bone_targets.Length) return false;
+
+            HumanBodyBones bone = (HumanBodyBones)bone_targets[targetIndex];
+            int child = bone_child[targetIndex];
+
+            if (child == -2) return false;
+
+            selectedBoneRoot = player.GetBonePosition(bone);
+            if (selectedBoneRoot.sqrMagnitude < 0.001f) return false;
+
+            // Identify bone child point
+            selectedBoneChildPos = Vector3.zero;
+            while (child >= 0)
+            {
+                selectedBoneChildPos = player.GetBonePosition((HumanBodyBones)bone_targets[child]);
+                if (selectedBoneChildPos.sqrMagnitude > 0.001) break;
+                child = bone_child[child];
+            }
+
+            boneHasChild = (child >= 0);
+
+            if (targetIndex == 0)
+            {
+                // Special handling for hips
+                Vector3 leftLeg = player.GetBonePosition(HumanBodyBones.LeftUpperLeg);
+                Vector3 rightLeg = player.GetBonePosition(HumanBodyBones.RightUpperLeg);
+                Vector3 betweenLegs = Vector3.Lerp(leftLeg, rightLeg, 0.5f);
+
+                if (betweenLegs.sqrMagnitude > 0.001f)
+                {
+                    selectedBoneRoot = player.GetBonePosition(HumanBodyBones.Spine);
+                    Vector3 displacement = betweenLegs - selectedBoneRoot;
+                    selectedBoneChildPos = selectedBoneRoot + displacement * 2; // why negative?
+                    boneHasChild = true;
+                }
+            } else if (targetIndex == 10)
+            {
+                // Special handling for head. Extend the bone vector in whichever _local_ axis is best aligned with the neck-head direction
+                Vector3 neck = player.GetBonePosition(HumanBodyBones.Neck);
+                Vector3 neckHeadRaw = selectedBoneRoot - neck;
+                Vector3 neckHead = neckHeadRaw.normalized;
+
+
+                Quaternion headRot = player.GetBoneRotation(HumanBodyBones.Head);
+
+                Vector3 bestAxis = headRot * Vector3.up;
+                float bestAxisLen = Mathf.Abs(Vector3.Dot(bestAxis, neckHead));
+
+                Vector3 candidate = headRot * Vector3.forward;
+                float axisLen = Mathf.Abs(Vector3.Dot(candidate, neckHead));
+                if (axisLen > bestAxisLen)
+                {
+                    bestAxis = candidate;
+                    bestAxisLen = axisLen;
+                }
+
+                candidate = headRot * Vector3.right;
+                axisLen = Mathf.Abs(Vector3.Dot(candidate, neckHead));
+                if (axisLen > bestAxisLen)
+                {
+                    bestAxis = candidate;
+                }
+
+                // Fix orientation and scale to more-or-less neck length
+                bestAxis *= Vector3.Dot(bestAxis, neckHeadRaw);
+
+                selectedBoneChildPos = selectedBoneRoot + bestAxis;
+                boneHasChild = true;
+            }
+
+            if (boneHasChild)
+            {
+                boneLength = (selectedBoneRoot - selectedBoneChildPos).magnitude;
+            }
+
+            return true;
         }
 
         // Returns the estimated distance to a bone, or -1 if not targetable
@@ -185,86 +281,29 @@ namespace net.fushizen.attachable
                 }
             }
 
-            HumanBodyBones bone = (HumanBodyBones)bone_targets[targetIndex];
-            int child = bone_child[targetIndex];
-            int parent = bone_parent[targetIndex];
-
-            if (child == -2) return false;
-
-            Vector3 bonePos = player.GetBonePosition(bone);
-            if (bonePos.sqrMagnitude < 0.001f) return false;
-
-            // Identify bone child point
-            Vector3 childPos = Vector3.zero;
-            while (child != -1)
+            if (!ComputeBonePosition(player, targetIndex))
             {
-                childPos = player.GetBonePosition((HumanBodyBones)bone_targets[child]);
-                if (childPos.sqrMagnitude > 0.001) break;
-                child = bone_child[child];
+                return false;
             }
 
-            if (targetIndex == 0)
+            if (!boneHasChild)
             {
-                // Special handling for hips
-                Vector3 leftLeg = player.GetBonePosition(HumanBodyBones.LeftUpperLeg);
-                Vector3 rightLeg = player.GetBonePosition(HumanBodyBones.RightUpperLeg);
-                Vector3 betweenLegs = Vector3.Lerp(leftLeg, rightLeg, 0.5f);
-
-                if (betweenLegs.sqrMagnitude > 0.001f)
-                {
-                    bonePos = player.GetBonePosition(HumanBodyBones.Spine);
-                    Vector3 displacement = betweenLegs - bonePos;
-                    childPos = bonePos + displacement * 2; // why negative?
-                    child = 0;
-                }
-            }
-
-            if (child == -1)
-            {
-                nearestPointRay = NearestPointToSphere(bonePos, raySource, rayDirection);
-                nearestPointBone = bonePos;
-                boneLength = 0;
+                nearestPointRay = raySource;
+                nearestPointBone = selectedBoneRoot;
             } else
             {
-                rayDirection = Vector3.Normalize(rayDirection);
-                Vector3 boneDirection = Vector3.Normalize(childPos - bonePos);
+                Vector3 velo = selectedBoneChildPos - selectedBoneRoot;
+                float t = PointDistanceToInfiniteLine(raySource, selectedBoneRoot, velo);
 
-                float limitHi = Vector3.Distance(childPos, bonePos);
+                if (t > 1) t = 1;
+                else if (t < 0) t = 0;
 
-                // https://homepage.univie.ac.at/franz.vesely/notes/hard_sticks/hst/hst.html
-
-                Vector3 r12 = bonePos - raySource;
-                float dot_e1 = Vector3.Dot(r12, rayDirection);
-                float dot_e2 = Vector3.Dot(r12, boneDirection);
-                float dotDirections = Vector3.Dot(rayDirection, boneDirection);
-                float divisor = (1 - dotDirections * dotDirections);
-
-                if (divisor < 0.001) return false;
-
-                float lambda = (dot_e1 - dot_e2 * dotDirections) / divisor;
-                float mu = -(dot_e2 - dot_e1 * dotDirections) / divisor; // why is this negative?
-
-                if (mu < 0)
-                {
-                    nearestPointBone = bonePos;
-                    nearestPointRay = NearestPointToSphere(nearestPointBone, raySource, rayDirection);
-                } else if (mu > limitHi)
-                {
-                    nearestPointBone = childPos;
-                    nearestPointRay = NearestPointToSphere(nearestPointBone, raySource, rayDirection);
-                } else
-                {
-                    nearestPointBone = bonePos + mu * boneDirection;
-                    nearestPointRay = raySource + lambda * rayDirection;
-                }
-
-                boneLength = limitHi;
+                nearestPointBone = selectedBoneRoot + velo * t;
+                nearestPointRay = raySource;
             }
 
-            boneDistance = Vector3.Distance(raySource, nearestPointRay) + Vector3.Distance(nearestPointRay, nearestPointBone);
-            selectedBoneRoot = bonePos;
-            selectedBoneChildPos = childPos;
-
+            boneDistance = Vector3.Distance(nearestPointRay, nearestPointBone) - Mathf.Abs(Vector3.Dot(nearestPointBone - nearestPointRay, rayDirection.normalized)) * 0.5f;
+            
             return true;
         }
 
@@ -277,10 +316,13 @@ namespace net.fushizen.attachable
         void Start()
         {
             InitBoneData();
+            mat_bone = t_boneSelectorModel.GetComponent<MeshRenderer>().sharedMaterial;
+            trigger_wasHeld = new bool[2];
 
             proxy = t_pickup.GetComponent<PickupProxy>();
             proxy._a_SetController(this);
             pickup = (VRC_Pickup)t_pickup.GetComponent(typeof(VRC_Pickup));
+            mr_pickup_proxy = t_pickup.GetComponent<MeshRenderer>();
 
             updateLoop = GetComponent<UpdateLoop>();
             updateLoop.enabled = false;
@@ -299,7 +341,7 @@ namespace net.fushizen.attachable
         #region Synced data
 
         [UdonSynced]
-        bool tracking;
+        bool tracking, heldSynced;
 
         // -1 when not tracking
         [UdonSynced]
@@ -348,7 +390,11 @@ namespace net.fushizen.attachable
                     t_objectSync.parent = transform;
                     t_objectSync.position = t_pickup.position;
 
+                    t_boneRootModel.gameObject.SetActive(false);
+
                     ParentAndZero(t_objectSync, t_pickup);
+
+                    markClosestPoint.gameObject.SetActive(false);
 
                     break;
                 case 1: // ST_ATTACHED
@@ -359,6 +405,10 @@ namespace net.fushizen.attachable
                     t_pickup.localRotation = rotationOffset;
                     t_pickup.localPosition = positionOffset;
 
+                    t_boneRootModel.gameObject.SetActive(false);
+
+                    markClosestPoint.gameObject.SetActive(false);
+
                     ParentAndZero(t_pickup, t_objectSync);
                     break;
                 case 2: // ST_HELD
@@ -366,9 +416,22 @@ namespace net.fushizen.attachable
 
                     updateLoop.enabled = true;
 
+                    markClosestPoint.gameObject.SetActive(true);
+
+                    ParentAndZero(t_pickup, t_objectSync);
+                    break;
+                case 3: // ST_HELD_REMOTE
+                    t_pickup.parent = transform;
+
+                    updateLoop.enabled = true;
+                    t_boneRootModel.gameObject.SetActive(false);
+
                     ParentAndZero(t_pickup, t_objectSync);
                     break;
             }
+
+            mr_pickup_proxy.enabled = (state == ST_ATTACHED);
+
             Debug.Log("=== End apply ===");
         }
 
@@ -380,11 +443,13 @@ namespace net.fushizen.attachable
                     updateLoop.enabled = false;
                     break;
                 case 2: //ST_HELD:
-                    _a_UpdateHeld();
+                    UpdateHeld();
                     break;
                 case 1: //ST_ATTACHED:
                     _a_UpdateAttached();
                     break;
+
+                    // No update for ST_HELD_REMOTE
             }
         }
 
@@ -444,6 +509,16 @@ namespace net.fushizen.attachable
             }
         }
 
+        public override void OnPreSerialization()
+        {
+            if (heldSynced && !Networking.LocalPlayer.Equals(pickup.currentPlayer))
+            {
+                // Something has gone terribly wrong, reset.
+                heldSynced = tracking = false;
+                SetState(ST_NOT_ATTACHED);
+            }
+        }
+
         public override void OnPlayerJoined(VRCPlayerApi player)
         {
             if (Networking.IsOwner(gameObject)) RequestSerialization();
@@ -451,145 +526,455 @@ namespace net.fushizen.attachable
 
         #endregion
 
-        #region Interaction
+        // Player search preferences
+        // All players with capsule center within range are considered candidates
+        // Prefer in order:
+        //  1. Last manually selected player
+        //  2. Self (if prefer self selected)
+        //  3. Nearest other players
+        //  4. Self (if prefer self not selected)
 
-        public void _a_OnPickup()
+        // Last manually selected player is cleared when we search and find them to not be a candidate
+
+        #region Bone search
+
+        // Bone search has two modes:
+        // Continuous scan - the initial mode, scans N bones per frame and selects the best continuously
+        // Manual selection - Cycles through bones in order of distance to target. We periodically scan to maintain this order.
+        //   Bones more than *X distance from the best candidate are rejected
+
+        readonly float secondaryCandidateMult = 3;
+
+        int[] prefBoneIds;
+        float[] prefBoneDistances;
+        int prefBoneLength;
+
+        void HeapSwap(int a, int b)
         {
-            Debug.Log("====== PICKUP ======");
-            if (!Networking.IsOwner(pickup.gameObject)) return;
+            float td = prefBoneDistances[a];
+            prefBoneDistances[a] = prefBoneDistances[b];
+            prefBoneDistances[b] = td;
 
-            SetState(ST_HELD);
-
-            Networking.SetOwner(Networking.LocalPlayer, gameObject);
-            tracking = false;
-            RequestSerialization();
+            int ti = prefBoneIds[a];
+            prefBoneIds[a] = prefBoneIds[b];
+            prefBoneIds[b] = ti;
         }
 
-        public void _a_OnDrop()
+        void HeapPush(int boneId, float dist)
         {
-            Debug.Log("====== DROP ======");
+            int i = prefBoneLength++;
+            prefBoneIds[i] = boneId;
+            prefBoneDistances[i] = dist;
 
-            if (!Networking.IsOwner(pickup.gameObject)) return;
+            while (i > 0)
+            {
+                int parent = (i - 1) >> 1;
 
-            if (state == ST_HELD)
-                SetState(ST_NOT_ATTACHED);
+                if (dist < prefBoneDistances[parent])
+                {
+                    HeapSwap(i, parent);
+                    i = parent;
+                } else
+                {
+                    break;
+                }
+            }
         }
 
-        #endregion
+        int HeapPop() {
 
-        float lastDump = 0;
+            if (prefBoneLength == 0)
+                return -1;
 
-        public void _a_UpdateHeld()
+            // pop and swap max to end
+            int i = --prefBoneLength;
+
+            HeapSwap(0, i);
+
+            // restore heap
+            float d = prefBoneDistances[0];
+            for(int j = 0; j < i; )
+            {
+                int c1 = (j << 1) + 1;
+                int c2 = c1 + 1;
+
+                float d1 = c1 < i ? prefBoneDistances[c1] : 99999;
+                float d2 = c2 < i ? prefBoneDistances[c2] : 99999;
+                    
+                if (d1 < d && d1 < d2) // move higher parent to the smaller child
+                {
+                    HeapSwap(j, c1);
+                    j = c1;
+                } else if (d2 < d)
+                {
+                    HeapSwap(j, c2);
+                    j = c2;
+                } else
+                {
+                    break;
+                }
+            }
+
+            return i;
+        }
+
+        void BoneScan(VRCPlayerApi player)
         {
-
-            var players = VRCPlayerApi.GetPlayers(new VRCPlayerApi[VRCPlayerApi.GetPlayerCount()]);
-            VRCPlayerApi target = null;
-
-            foreach (var p in players)
-            {
-                if (p.isLocal) continue;
-                target = p;
-                break;
-            }
-
-            if (target == null)
-            {
-                target = Networking.LocalPlayer;
-            }
-
             int nBones = bone_targets.Length;
-            float bestDistance = range * 2;
-            int bestBone = -1;
-            bool fullDump = Time.time - lastDump > 5;
-            float bestBoneLength = 0;
 
             Vector3 bestBoneRoot = Vector3.zero, bestBoneChild = Vector3.zero;
 
             var sw = new System.Diagnostics.Stopwatch();
             sw.Start();
 
+            prefBoneIds = new int[bone_targets.Length];
+            prefBoneDistances = new float[bone_targets.Length];
+            prefBoneLength = 0;
+            prefBoneDistances[0] = 99999;
+
             for (int i = 0; i < nBones; i++)
             {
                 boneDistance = 999;
-                bool success = DistanceToBone(target, t_pickup.position, t_pickup.TransformDirection(Vector3.forward), i);
+                bool success = DistanceToBone(player, t_pickup.position, t_pickup.TransformDirection(Vector3.forward), i);
 
-                if (success && boneDistance <= bestDistance)
+                if (success && boneDistance <= prefBoneDistances[0] * secondaryCandidateMult)
                 {
-                    bestDistance = boneDistance;
-                    //markClosestPoint.position = nearestPointRay;
+                    HeapPush(i, boneDistance);
+                }
+            }
 
-                    bestBone = i;
-                    bestBoneLength = boneLength;
-                    bestBoneRoot = selectedBoneRoot;
-                    bestBoneChild = selectedBoneChildPos;
+            if (prefBoneLength > 0)
+            {
+                closestBoneDistance = prefBoneDistances[0];
+            }
+        }
 
-                    if (fullDump)
+        #endregion
+
+
+        #region Held controls
+
+        float closestBoneDistance;
+
+        public void _a_OnPickup()
+        {
+            if (Networking.IsOwner(pickup.gameObject))
+            {
+                SetState(ST_HELD_LOCAL);
+                heldSynced = true;
+
+                Networking.SetOwner(Networking.LocalPlayer, gameObject);
+
+                if (tracking && TargetPlayerValid())
+                {
+                    BoneScan(VRCPlayerApi.GetPlayerById(trackingPlayerId));
+                }
+
+                RequestSerialization();
+
+                // Suppress the desktop trigger-press-on-pickup
+                trigger_wasHeld[0] = trigger_wasHeld[1] = true;
+            } else
+            {
+                SetState(ST_HELD_REMOTE);
+            }
+        }
+
+        public void _a_OnDrop()
+        {
+            if (tracking)
+            {
+                _a_UpdateAttached(); //; update bone proxy
+
+                // If we're not owner, and the owner hasn't replicated the ondrop event, predict the transform values
+                var isOwner = Networking.IsOwner(gameObject);
+                if (isOwner || heldSynced)
+                {
+                    positionOffset = t_boneProxy.InverseTransformPoint(t_pickup.position);
+                    rotationOffset = Quaternion.Inverse(t_boneProxy.rotation) * t_pickup.rotation;
+
+                    if (isOwner)
                     {
-                        Debug.Log($"Full dump [bone {bone_targets[i]}]: success {success} distance {boneDistance} best {bestDistance}");
+                        heldSynced = false;
+                        RequestSerialization();
                     }
-
                 }
-            }
-
-            if (fullDump)
-            {
-                lastDump = Time.time;
-            }
-
-            if (bestBone >= 0)
-            {
-                var bone = (HumanBodyBones)bone_targets[bestBone];
-                t_boneProxy.position = target.GetBonePosition(bone);
-                t_boneProxy.rotation = target.GetBoneRotation(bone);
-
-                t_boneRootModel.position = bestBoneRoot;
-                t_boneRootModel.rotation = Quaternion.LookRotation(bestBoneChild - bestBoneRoot);
-
-                if (bestBoneLength < 0.001)
-                {
-                    t_boneRootModel.localScale = new Vector3(0.1f, 0.1f, 0.1f);
-                    t_boneSelectorModel.gameObject.SetActive(false);
-                } else
-                {
-                    t_boneRootModel.localScale = new Vector3(bestBoneLength, bestBoneLength, bestBoneLength);
-                    t_boneSelectorModel.gameObject.SetActive(true);
-                    markBoneTarget.position = bestBoneChild;
-                }
-
-                trackingPlayerId = target.playerId;
-                trackingBoneId = bestBone;
+                
             } else
             {
                 trackingPlayerId = -1;
+            }
+
+            if (Networking.IsOwner(pickup.gameObject))
+            {
+                Networking.SetOwner(Networking.LocalPlayer, gameObject);
+                RequestSerialization();
+            }
+
+            SetState(tracking ? ST_ATTACHED : ST_NOT_ATTACHED);
+        }
+
+        void DisplayBoneModel(VRCPlayerApi target)
+        {
+            string boneTarget = "<invalid>";
+            if (ComputeBonePosition(target, trackingBoneId))
+            {
+                boneTarget = bone_targets[trackingBoneId].ToString();
+                t_boneRootModel.position = selectedBoneRoot;
+
+                if (!boneHasChild)
+                {
+                    t_boneRootModel.localScale = new Vector3(0.1f, 0.1f, 0.1f);
+                    t_boneRootModel.rotation = Quaternion.identity;
+                    t_boneSelectorModel.gameObject.SetActive(false);
+                }
+                else
+                {
+                    t_boneRootModel.localScale = new Vector3(boneLength, boneLength, boneLength);
+                    t_boneRootModel.rotation = Quaternion.LookRotation(selectedBoneChildPos - selectedBoneRoot);
+                    t_boneSelectorModel.gameObject.SetActive(true);
+                    markBoneTarget.position = selectedBoneChildPos;
+                }
+
+                t_boneRootModel.gameObject.SetActive(true);
+                mat_bone.SetColor("_WireColor", tracking ? Color.green : Color.blue);
+            }
+            else
+            {
+                t_boneRootModel.gameObject.SetActive(false);
+            }
+        }
+
+        bool TargetPlayerValid()
+        {
+            var player = VRCPlayerApi.GetPlayerById(trackingPlayerId);
+
+            if (!Utilities.IsValid(player)) return false;
+
+            return Vector3.Distance(player.GetPosition(), pickup.transform.position) <= range;
+        }
+
+        VRCPlayerApi[] playerArray;
+
+        int FindNextPlayer(int minPlayerId)
+        {
+            if (playerArray == null || playerArray.Length < 128)
+            {
+                playerArray = new VRCPlayerApi[128];
+            }
+
+            int nPlayers = VRCPlayerApi.GetPlayerCount();
+            playerArray = VRCPlayerApi.GetPlayers(playerArray);
+
+            float bestDistance = range;
+            int bestPlayerId = -1;
+
+            var pickupPos = pickup.transform.position;
+
+            for (int i = 0; i < nPlayers; i++)
+            {
+                var player = playerArray[i];
+                
+                if (!Utilities.IsValid(player)) continue;
+
+                var playerId = player.playerId;
+
+                if (playerId <= minPlayerId) continue;
+
+                float distance = Vector3.Distance(pickupPos, player.GetPosition());
+
+
+                if (player.isLocal)
+                {
+                    if (preferSelf)
+                    {
+                        if (distance < range) {
+                            return playerId;
+                        }
+                    }
+                    else if (i < nPlayers - 1)
+                    {
+                        // Move self to the end of the list to evaluate last
+                        var tmp = playerArray[nPlayers - 1];
+                        playerArray[nPlayers - 1] = player;
+                        playerArray[i] = tmp;
+                        i--;
+                    } else
+                    {
+                        // Select only if we have no choice
+                        if (bestPlayerId == -1)
+                        {
+                            bestPlayerId = playerId;
+                            bestDistance = distance;
+                        }
+                    }
+                } else
+                {
+                    if (distance > bestDistance) continue;
+
+                    bestDistance = distance;
+                    bestPlayerId = playerId;
+                }
+            }
+
+            return bestPlayerId;
+        }
+
+        VRCPlayerApi UpdateTrackingPlayer()
+        {
+            // Check if we need to perform a target player search. This happens only when the current player is invalid or out of range.
+            if (!TargetPlayerValid())
+            {
+                tracking = false;
+                trackingPlayerId = FindNextPlayer(-1);
+                if (trackingPlayerId < 0)
+                {
+                    if (tracking) RequestSerialization();
+
+                    return null;
+                }
+            }
+
+            VRCPlayerApi target = VRCPlayerApi.GetPlayerById(trackingPlayerId);
+            if (!Utilities.IsValid(target))
+            {
+                // Should be impossible...?
+                if (tracking)
+                {
+                    tracking = false;
+                    trackingPlayerId = -1;
+                    RequestSerialization();
+                }
+                return null;
+            }
+
+            return target;
+        }
+
+        void UpdateHeld() {
+            VRCPlayerApi player = UpdateTrackingPlayer();
+            if (player == null)
+            {
+                Debug.Log("=== No candidate players");
+                // No candidate players in range, disable display
+                t_boneRootModel.gameObject.SetActive(false);
+                return;
+            }
+
+            CheckInput();
+
+            // If we've held the trigger for long enough, release tracking
+            if (tracking && trigger_wasHeld[0] && trigger_sameHand_lastChange + 3.0f < Time.timeSinceLevelLoad)
+            {
+                tracking = false;
+                RequestSerialization();
+            }
+
+            // If locked, check if current bone is a valid target.
+            bool needScan = !tracking
+                || !DistanceToBone(player, t_pickup.position, t_pickup.TransformDirection(Vector3.forward), trackingBoneId)
+                || boneDistance > closestBoneDistance * secondaryCandidateMult;
+
+            if (needScan)
+            {
+                BoneScan(player);
+                int priorId = trackingBoneId;
+                trackingBoneId = prefBoneLength > 0 ? prefBoneIds[0] : -1;
+                if (priorId != trackingBoneId) RequestSerialization();
+            }
+
+            DisplayBoneModel(player);
+        }
+
+        void _a_OnTriggerChanged(bool boneSelectTrigger, bool prior)
+        {
+            Debug.Log($"=== OnTriggerChanges boneSelectTrigger={boneSelectTrigger} prior={prior}");
+
+            if (prior) return; // only trigger on false -> true transition
+
+            if (boneSelectTrigger)
+            {
+                // Lock to bone
+                if (trackingBoneId >= 0)
+                {
+                    if (tracking)
+                    {
+                        if (prefBoneLength > 1)
+                        {
+                            var priorBoneDist = prefBoneDistances[0];
+                            // Find next bone
+                            if (HeapPop() > -1)
+                            {
+                                trackingBoneId = prefBoneIds[0];
+                                Debug.Log($"Pop: Bone distance {priorBoneDist}=>{prefBoneDistances[0]}@{bone_targets[prefBoneIds[0]]}");
+                            } else
+                            {
+                                trackingBoneId = -1;
+                            }
+                            
+                            RequestSerialization();
+                        } else
+                        {
+                            // Restart scan on next update frame
+                            trackingBoneId = -1;
+                        }
+                    } else
+                    {
+                        tracking = true;
+
+                        RequestSerialization();
+                    }
+                }
+            } else
+            {
+                // Change tracking player
+                if (trackingPlayerId < 0) return;
+
+                trackingPlayerId = FindNextPlayer(trackingPlayerId);
+                tracking = false;
                 trackingBoneId = -1;
             }
-
-            sw.Stop();
-
-            if ((Time.frameCount % 100) == 0)
-            {
-                var elapsed = (double)sw.ElapsedTicks / (double)System.Diagnostics.Stopwatch.Frequency;
-
-                Debug.Log($"Bone search elapsed: {sw.ElapsedTicks} ticks {sw.Elapsed.TotalMilliseconds:F4} ms {sw.Elapsed.TotalMilliseconds * 1000.0:F6} uS");
-            }
         }
 
-        public void _a_Commit()
+        void CheckInput()
         {
-            Debug.Log("====== COMMIT ======");
+            if (state != ST_HELD_LOCAL) return;
 
-            if (trackingPlayerId != -1)
+            bool boneSelectTrigger, userSelectTrigger;
+
+            if (Networking.LocalPlayer.IsUserInVR())
             {
-                tracking = true;
-                t_pickup.parent = t_boneProxy;
-                positionOffset = t_pickup.localPosition;
-                rotationOffset = t_pickup.localRotation;
+                bool heldInLeft = pickup.currentHand == VRC_Pickup.PickupHand.Left;
 
-                SetState(ST_ATTACHED);
-                RequestSerialization();
+                boneSelectTrigger = Input.GetAxis("Oculus_CrossPlatform_PrimaryIndexTrigger") > 0.9;
+                userSelectTrigger = Input.GetAxis("Oculus_CrossPlatform_SecondaryIndexTrigger") > 0.9;
 
-                pickup.Drop();
+                if (!heldInLeft)
+                {
+                    bool tmp = boneSelectTrigger;
+                    boneSelectTrigger = userSelectTrigger;
+                    userSelectTrigger = tmp;
+                }
+            } else
+            {
+                boneSelectTrigger = Input.GetMouseButton(0);
+                userSelectTrigger = Input.GetMouseButton(2);
+            }
+
+            if (trigger_wasHeld[0] != boneSelectTrigger)
+            {
+                _a_OnTriggerChanged(true, trigger_wasHeld[0]);
+                trigger_wasHeld[0] = boneSelectTrigger;
+                trigger_sameHand_lastChange = Time.timeSinceLevelLoad;
+            }
+
+            if (trigger_wasHeld[1] != userSelectTrigger)
+            {
+                _a_OnTriggerChanged(false, trigger_wasHeld[1]);
+                trigger_wasHeld[1] = userSelectTrigger;
             }
         }
+
+        #endregion
     }
 }
