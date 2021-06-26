@@ -41,13 +41,15 @@ namespace net.fushizen.attachable
         #region Editor configuration
         public Transform t_pickup, t_boneProxy;
 
-        public Transform t_boneSelectorModel, t_boneRootModel;
+        public Transform t_boneSelectorModel, t_boneRootModel, t_traceMarker;
         Material mat_bone;
         MeshRenderer mr_pickup_proxy;
 
         public float range;
 
         public bool preferSelf;
+
+        public bool perm_removeTracee, perm_removeOwner, perm_removeOther;
 
         #endregion
 
@@ -384,6 +386,7 @@ namespace net.fushizen.attachable
                     Debug.Log("ApplyState: Active holder is remote");
                     t_boneRootModel.gameObject.SetActive(false);
                     markClosestPoint.gameObject.SetActive(false);
+                    t_traceMarker.gameObject.SetActive(false);
                     enable_update = false;
 
                     if (!checkHeldActive)
@@ -407,6 +410,10 @@ namespace net.fushizen.attachable
 
                 enable_update = true;
                 enable_prerender = true;
+
+                t_boneRootModel.gameObject.SetActive(false);
+                markClosestPoint.gameObject.SetActive(false);
+                t_traceMarker.gameObject.SetActive(false);
             } else
             {
                 Debug.Log("ApplyState: Not tracking");
@@ -415,10 +422,33 @@ namespace net.fushizen.attachable
 
                 enable_update = false;
                 enable_prerender = false;
+
+                t_boneRootModel.gameObject.SetActive(false);
+                markClosestPoint.gameObject.SetActive(false);
+                t_traceMarker.gameObject.SetActive(false);
             }
-            
+
+            SetPickupPerms();
+
             mr_pickup_proxy.enabled = enable_prerender;
             updateLoop.enabled = enable_update;
+        }
+
+        void SetPickupPerms()
+        {
+            if (!tracking || VRCPlayerApi.GetPlayerCount() == 1)
+            {
+                pickup.pickupable = true;
+            } else
+            {
+                bool isTarget = Networking.LocalPlayer.playerId == trackingPlayerId;
+                bool isOwner = Networking.IsOwner(gameObject);
+                bool isOther = !(isTarget || isOwner);
+
+                bool canPickup = (perm_removeTracee && isTarget) || (perm_removeOwner && isOwner) || (perm_removeOther && isOther);
+
+                pickup.pickupable = canPickup;
+            }
         }
 
         public void _a_Update()
@@ -729,11 +759,21 @@ namespace net.fushizen.attachable
                 }
 
                 t_boneRootModel.gameObject.SetActive(true);
+
+                Vector3 traceTarget = Vector3.Lerp(selectedBoneRoot, selectedBoneChildPos, 0.5f);
+                Vector3 traceSource = t_pickup.position;
+                t_traceMarker.position = traceSource;
+                t_traceMarker.rotation = Quaternion.LookRotation(traceTarget - traceSource);
+                t_traceMarker.localScale = 
+                    transform.lossyScale.magnitude * Vector3.Distance(traceSource, traceTarget) * new Vector3(0.5f, 0.5f, 0.5f);
+                t_traceMarker.gameObject.SetActive(true);
+
                 mat_bone.SetColor("_WireColor", tracking ? Color.green : Color.blue);
             }
             else
             {
                 t_boneRootModel.gameObject.SetActive(false);
+                t_traceMarker.gameObject.SetActive(false);
             }
         }
 
@@ -746,70 +786,105 @@ namespace net.fushizen.attachable
             return Vector3.Distance(player.GetPosition(), pickup.transform.position) <= range;
         }
 
+        float lastPlayerSearch;
         VRCPlayerApi[] playerArray;
+        int playerCountInArray;
 
-        int FindNextPlayer(int minPlayerId)
+        int FindPlayer()
         {
+            var priorSearch = lastPlayerSearch;
+            lastPlayerSearch = Time.timeSinceLevelLoad;
+
+            if (playerCountInArray > 0 && priorSearch + 5.0f >= Time.timeSinceLevelLoad)
+            {
+                int rv = FindNextPlayer();
+                if (rv != -1) return rv;
+                Debug.Log($"Failed to continue search, restarting");
+            }
+
             if (playerArray == null || playerArray.Length < 128)
             {
                 playerArray = new VRCPlayerApi[128];
             }
 
-            int nPlayers = VRCPlayerApi.GetPlayerCount();
+            playerCountInArray = VRCPlayerApi.GetPlayerCount();
             playerArray = VRCPlayerApi.GetPlayers(playerArray);
 
+            return FindNextPlayer();
+        }
+
+        int FindNextPlayer()
+        {
             float bestDistance = range;
-            int bestPlayerId = -1;
+            int bestIndex = -1;
 
             var pickupPos = pickup.transform.position;
 
-            for (int i = 0; i < nPlayers; i++)
+            for (int i = 0; i < playerCountInArray; i++)
             {
                 var player = playerArray[i];
-                
-                if (!Utilities.IsValid(player)) continue;
+
+                if (!Utilities.IsValid(player))
+                {
+                    // Clear this slot and continue
+                    playerArray[i] = playerArray[playerCountInArray - 1];
+                    i--;
+                    continue;
+                }
 
                 var playerId = player.playerId;
 
-                if (playerId <= minPlayerId) continue;
-
                 float distance = Vector3.Distance(pickupPos, player.GetPosition());
-
 
                 if (player.isLocal)
                 {
                     if (preferSelf)
                     {
+                        Debug.Log("FNP: Select self");
                         if (distance < range) {
                             return playerId;
                         }
                     }
-                    else if (i < nPlayers - 1)
+                    else if (i < playerCountInArray - 1)
                     {
+                        Debug.Log($"FNP: Defer last; swap {playerId} with {playerArray[playerCountInArray - 1].playerId}");
                         // Move self to the end of the list to evaluate last
-                        var tmp = playerArray[nPlayers - 1];
-                        playerArray[nPlayers - 1] = player;
+                        var tmp = playerArray[playerCountInArray - 1];
+                        playerArray[playerCountInArray - 1] = player;
                         playerArray[i] = tmp;
                         i--;
                     } else
                     {
                         // Select only if we have no choice
-                        if (bestPlayerId == -1)
+                        if (bestIndex == -1 && distance < range)
                         {
-                            bestPlayerId = playerId;
+                            bestIndex = i;
                             bestDistance = distance;
                         }
                     }
                 } else
                 {
-                    if (distance > bestDistance) continue;
-
-                    bestDistance = distance;
-                    bestPlayerId = playerId;
+                    if (distance < bestDistance)
+                    {
+                        bestDistance = distance;
+                        bestIndex = i;
+                    }
                 }
             }
 
-            return bestPlayerId;
+            if (bestIndex != -1)
+            {
+                // Remove from list
+                var bestPlayer = playerArray[bestIndex];
+
+                Debug.Log($"Removing element {bestIndex} @ player ID {bestPlayer.playerId}");
+
+                playerArray[bestIndex] = playerArray[--playerCountInArray];
+
+                return bestPlayer.playerId;
+            }
+
+            return -1;
         }
 
         VRCPlayerApi UpdateTrackingPlayer()
@@ -818,7 +893,7 @@ namespace net.fushizen.attachable
             if (!TargetPlayerValid())
             {
                 tracking = false;
-                trackingPlayerId = FindNextPlayer(-1);
+                trackingPlayerId = FindPlayer();
                 if (trackingPlayerId < 0)
                 {
                     if (tracking) RequestSerialization();
@@ -850,6 +925,7 @@ namespace net.fushizen.attachable
                 Debug.Log("=== No candidate players");
                 // No candidate players in range, disable display
                 t_boneRootModel.gameObject.SetActive(false);
+                t_traceMarker.gameObject.SetActive(false);
                 return;
             }
 
@@ -878,6 +954,51 @@ namespace net.fushizen.attachable
             DisplayBoneModel(player);
         }
 
+        /* BoneScan(player); */
+        void NextBone()
+        {
+            if (trigger_sameHand_lastChange + 5.0f < Time.timeSinceLevelLoad)
+            {
+                // Perform new scan
+                var player = VRCPlayerApi.GetPlayerById(trackingPlayerId);
+                if (!Utilities.IsValid(player)) return;
+
+                BoneScan(player);
+
+                if (prefBoneLength < 1)
+                {
+                    tracking = false;
+                    trackingBoneId = -1;
+                } else {
+                    trackingBoneId = prefBoneIds[0];
+                }
+                
+                return;
+            }
+
+            if (prefBoneLength > 1)
+            {
+                var priorBoneDist = prefBoneDistances[0];
+                // Find next bone
+                if (HeapPop() > -1)
+                {
+                    trackingBoneId = prefBoneIds[0];
+                    Debug.Log($"Pop: Bone distance {priorBoneDist}=>{prefBoneDistances[0]}@{bone_targets[prefBoneIds[0]]}");
+                }
+                else
+                {
+                    trackingBoneId = -1;
+                }
+
+                RequestSerialization();
+            }
+            else
+            {
+                // Restart scan on next update frame
+                trackingBoneId = -1;
+            }
+        }
+
         void _a_OnTriggerChanged(bool boneSelectTrigger, bool prior)
         {
             Debug.Log($"=== OnTriggerChanges boneSelectTrigger={boneSelectTrigger} prior={prior}");
@@ -891,30 +1012,10 @@ namespace net.fushizen.attachable
                 {
                     if (tracking)
                     {
-                        if (prefBoneLength > 1)
-                        {
-                            var priorBoneDist = prefBoneDistances[0];
-                            // Find next bone
-                            if (HeapPop() > -1)
-                            {
-                                trackingBoneId = prefBoneIds[0];
-                                Debug.Log($"Pop: Bone distance {priorBoneDist}=>{prefBoneDistances[0]}@{bone_targets[prefBoneIds[0]]}");
-                            } else
-                            {
-                                trackingBoneId = -1;
-                            }
-                            
-                            RequestSerialization();
-                        } else
-                        {
-                            // Restart scan on next update frame
-                            trackingBoneId = -1;
-                        }
+                        NextBone();
                     } else
                     {
                         tracking = true;
-
-                        RequestSerialization();
                     }
                 }
             } else
@@ -922,7 +1023,7 @@ namespace net.fushizen.attachable
                 // Change tracking player
                 if (trackingPlayerId < 0) return;
 
-                trackingPlayerId = FindNextPlayer(trackingPlayerId);
+                trackingPlayerId = FindPlayer();
                 tracking = false;
                 trackingBoneId = -1;
             }
