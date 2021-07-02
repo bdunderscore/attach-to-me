@@ -5,6 +5,8 @@ using VRC.SDKBase;
 using VRC.Udon;
 using VRC.Udon.Common;
 
+
+
 namespace net.fushizen.attachable
 {
     // UI controls
@@ -36,48 +38,307 @@ namespace net.fushizen.attachable
     // that is X times better. Manual overriding can also select any bone not more than X times worse than the best.
 
     [UdonBehaviourSyncMode(BehaviourSyncMode.Manual)]
+    [DefaultExecutionOrder(0)]
     public class Attachable : UdonSharpBehaviour
     {
-        #region Editor configuration
-        public Transform t_pickup, t_boneProxy;
+        #region Inspector fields
 
-        public Transform t_boneSelectorModel, t_boneRootModel, t_traceMarker;
-        Material mat_bone;
-        MeshRenderer mr_pickup_proxy;
+        public Transform t_pickup;
+        public Transform t_attachmentDirection;
+        public Transform t_support;
 
-        public float range;
+        public float range = 2;
+        [Range(0,1)]
+        public float directionality = 0;
+        public bool preferSelf = true;
 
-        public bool preferSelf;
-
-        public bool perm_removeTracee, perm_removeOwner, perm_removeOther;
-
-        #endregion
-
-
-        #region Placement state
-
-        readonly int ST_NOT_ATTACHED = 0;
-        readonly int ST_ATTACHED = 1;
-        readonly int ST_HELD_LOCAL = 2;
-        readonly int ST_HELD_REMOTE = 3;
-
-        int state;
+        public bool perm_removeTracee = true;
+        public bool perm_removeOwner = true;
+        public bool perm_removeOther = true;
 
         #endregion
 
-        #region Input state
+        #region Support object references
+
+        /// PickupProxy object on the pickup
+        AttachableInternalPickupProxy proxy;
+        /// Actual VRC_Pickup object
+        VRC_Pickup pickup;
+
+        /// Transform for the beam shown from the pickup to the bone
+        private Transform t_traceMarker;
+
+        /// Root transform for the bone display mode
+        private Transform t_boneModelRoot;
+
+        /// The gameobject holding the renderer for the prism representing the body of the bone
+        private GameObject obj_boneModelBody;
+
+        /// <summary>
+        /// Material used to render the bone wireframes
+        /// </summary>
+        private Material mat_bone;
+
+        /// Disablable update loop component
+        AttachableInternalUpdateLoop updateLoop;
+
+        Transform t_renderRelay;
+        GameObject obj_renderRelay;
+        AttachableInternalRenderRelay renderRelay;
+
+        #endregion
+
+        #region State transition animation data
+
+        Vector3 transitionPosition;
+        Quaternion transitionRotation;
+
+        float transitionEndTime;
+
+        readonly float transitionDuration = 0.1f;
+
+        #endregion
+
+        #region Core tracking state state
+
+        // When tracking a bone, contains the position and rotation offset relative to that bone.
+        [UdonSynced]
+        Vector3 sync_pos;
+        [UdonSynced]
+        Quaternion sync_rot;
+
+        // When tracking a bone (possibly the holder's hand), contains the target player and bone index.
+        // When not tracking, sync_targetPlayer contains -1
+        [UdonSynced]
+        int sync_targetPlayer, sync_targetBone;
+
+        // Incremented when changes are made to synced state;
+        [UdonSynced]
+        int sync_seqno;
+
+        // Last applied state sequence number (triggers lerping transition)
+        int last_seqno;
+
+        #endregion
+
+        #region Bone state
+
+        Vector3 bonePosition;
+        Quaternion boneRotation;
+
+        #endregion
+
+        #region Selection state
+
+        /// <summary>
+        /// True if held by the local user.
+        /// </summary>
+        bool isHeldLocally;
+
+        /// <summary>
+        /// True if we intend to transition to tracking mode on drop (ie we're locked on)
+        /// </summary>
+        bool tracking;
+
+        /// <summary>
+        /// Local target player
+        /// </summary>
+        int targetPlayerId;
+        /// <summary>
+        /// Local target bone
+        /// </summary>
+        int targetBoneId;
 
         bool[] trigger_wasHeld;
         float trigger_sameHand_lastChange;
 
+        /// <summary>
+        /// Time (since scene load) of the last full scan we performed, when in target-locked mode.
+        /// Used to determine if bone selection will do a new full search or not
+        /// 
+        /// TODO: unused
+        /// </summary>
         float lastBoneScan;
 
         #endregion
 
-        #region Debug
+        #region Initialization
 
-        public Transform markClosestPoint;
-        public Transform markBoneTarget;
+        void SetupReferences()
+        {
+            proxy = t_pickup.GetComponent<AttachableInternalPickupProxy>();
+            proxy._a_SetController(this);
+            pickup = (VRC_Pickup) t_pickup.GetComponent(typeof(VRC_Pickup));
+
+            renderRelay = t_support.Find("Render Relay").GetComponent<AttachableInternalRenderRelay>();
+            t_renderRelay = renderRelay.transform;
+            renderRelay.parent = this;
+
+            t_traceMarker = t_support.Find("TraceMarker");
+            t_boneModelRoot = t_support.Find("BoneMarkerRoot");
+            obj_boneModelBody = t_boneModelRoot.Find("boneMarker/Bone").gameObject;
+
+            mat_bone = obj_boneModelBody.transform.GetComponent<MeshRenderer>().sharedMaterial;
+
+            updateLoop = GetComponent<AttachableInternalUpdateLoop>();
+        }
+
+        void Start()
+        {
+            Debug.LogWarning($"radius={range}");
+            trigger_wasHeld = new bool[2];
+
+            InitBoneData();
+            SetupReferences();
+
+            ClearTracking();
+
+            updateLoop.enabled = false;
+
+            UpdateTracking();
+            SetPickupPerms();
+        }
+
+
+        #endregion
+
+        #region Tracking
+
+        // We normally run in OnPreRender, but if PreRender isn't doing its job we need to fix things up.
+        int nextPrerenderFrame;
+
+        /// <summary>
+        /// Disables tracking in synced data (but does not actually request serialization)
+        /// </summary>
+        void ClearTracking()
+        {
+            transitionEndTime = -1;
+
+            sync_targetPlayer = sync_targetBone = -1;
+
+            updateLoop.enabled = false;
+            obj_renderRelay.SetActive(false);
+
+            sync_seqno++;
+        }
+
+        /// <summary>
+        /// Tracks the specified player and bone, computing the position/rotation offsets based on present world position.
+        /// </summary>
+        /// <param name="playerId">Target player</param>
+        /// <param name="boneId">Target bone</param>
+        /// <returns>True if successful, false if we could not track this bone (in which case we will track world position)</returns>
+        bool TrackBone(int playerId, int boneId)
+        {
+            Debug.Log("TrackBone");
+            transitionEndTime = -1;
+
+            sync_targetBone = boneId;
+            sync_targetPlayer = playerId;
+            if (!UpdateBoneProxy())
+            {
+                Debug.Log("=== UpdateBoneProxy failed");
+                ClearTracking();
+                return false;
+            }
+
+            var invRot = Quaternion.Inverse(boneRotation);
+            sync_pos = invRot * (t_pickup.position - bonePosition);
+            sync_rot = invRot * t_pickup.rotation;
+
+            sync_seqno++;
+
+            updateLoop.enabled = true;
+            obj_renderRelay.SetActive(true);
+
+            Debug.Log($"Tracked bone pid={targetPlayerId} bid={targetBoneId} pos={sync_pos} rot={sync_rot} seq={sync_seqno}");
+
+            return true;
+        }
+
+        /// <summary>
+        /// Updates the bone proxy transform to match the targeted bone.
+        /// </summary>
+        /// <returns>True if successful, else false</returns>
+        bool UpdateBoneProxy()
+        {
+            VRCPlayerApi player = VRCPlayerApi.GetPlayerById(sync_targetPlayer);
+            if (player == null || !Utilities.IsValid(player))
+            {
+                return false;
+            }
+
+            var bone = (HumanBodyBones)bone_targets[sync_targetBone];
+            var bonePos = player.GetBonePosition(bone);
+
+            if (bonePos.sqrMagnitude < 0.001)
+            {
+                return false;
+            }
+
+            this.bonePosition = bonePos;
+            this.boneRotation = player.GetBoneRotation(bone);
+
+            return true;
+        }
+
+        /// <summary>
+        /// Updates the pickup position to match tracked data.
+        /// </summary>
+        /// <returns>True if successful, false if tracking failed for some reason (eg, missing target or missing bone)</returns>
+        void UpdateTracking()
+        {
+            if (isHeldLocally)
+            {
+                if (!Networking.IsOwner(gameObject))
+                {
+                    // Whoops, someone else stole it
+                    pickup.Drop();
+                }
+            }
+
+            var isTracking = (sync_targetPlayer >= 0);
+
+            updateLoop.enabled = isHeldLocally || isTracking;
+            obj_renderRelay.SetActive(isTracking);
+
+            if (!isTracking || isHeldLocally)
+            {
+                return;
+            }
+
+            if (!UpdateBoneProxy()) {
+                if (Networking.IsOwner(gameObject))
+                {
+                    ClearTracking();
+                    RequestSerialization();
+                }
+                return;
+            }
+
+            var pos = boneRotation * sync_pos + bonePosition;
+            var rot = boneRotation * sync_rot;
+
+            if (sync_seqno != last_seqno)
+            {
+                transitionPosition = t_pickup.position;
+                transitionRotation = t_pickup.rotation;
+                transitionEndTime = Time.timeSinceLevelLoad + transitionDuration;
+                last_seqno = sync_seqno;
+            }
+
+            if (transitionEndTime > Time.timeSinceLevelLoad)
+            {
+                var blend = (transitionEndTime - Time.timeSinceLevelLoad) / transitionDuration;
+
+                // Lerp from transition position/rotation
+                pos = Vector3.Lerp(pos, transitionPosition, blend);
+                rot = Quaternion.Lerp(rot, transitionRotation, blend);
+            }
+
+            t_pickup.SetPositionAndRotation(pos, rot);
+            t_renderRelay.position = pos;
+        }
 
         #endregion
 
@@ -261,8 +522,10 @@ namespace net.fushizen.attachable
         }
 
         // Returns the estimated distance to a bone, or -1 if not targetable
-        bool DistanceToBone(VRCPlayerApi player, Vector3 raySource, Vector3 rayDirection, int targetIndex)
+        bool DistanceToBone(VRCPlayerApi player, int targetIndex)
         {
+            Vector3 raySource = t_attachmentDirection.position;
+
             if (player.isLocal && player.Equals(pickup.currentPlayer))
             {
                 // Don't attach to the current hand
@@ -304,144 +567,111 @@ namespace net.fushizen.attachable
                 nearestPointRay = raySource;
             }
 
-            boneDistance = Vector3.Distance(nearestPointRay, nearestPointBone) - Mathf.Abs(Vector3.Dot(nearestPointBone - nearestPointRay, rayDirection.normalized)) * 0.5f;
+            var directionalVector = t_attachmentDirection.TransformDirection(Vector3.forward);
+
+            boneDistance = Vector3.Distance(nearestPointRay, nearestPointBone) - directionality * Mathf.Abs(Vector3.Dot(nearestPointBone - nearestPointRay, directionalVector));
             
             return true;
         }
 
         #endregion
 
-        PickupProxy proxy;
-        VRC_Pickup pickup;
-        UpdateLoop updateLoop;
+        #region Held state transition and sync management
 
-        void Start()
+        public void _a_OnPickup()
         {
-            InitBoneData();
-            mat_bone = t_boneSelectorModel.GetComponent<MeshRenderer>().sharedMaterial;
-            trigger_wasHeld = new bool[2];
+            Networking.SetOwner(Networking.LocalPlayer, gameObject);
 
-            proxy = t_pickup.GetComponent<PickupProxy>();
-            proxy._a_SetController(this);
-            pickup = (VRC_Pickup)t_pickup.GetComponent(typeof(VRC_Pickup));
-            mr_pickup_proxy = t_pickup.GetComponent<MeshRenderer>();
+            isHeldLocally = true;
 
-            updateLoop = GetComponent<UpdateLoop>();
-            updateLoop.enabled = false;
+            // Save target bones
+            targetPlayerId = sync_targetPlayer;
+            targetBoneId = sync_targetBone;
 
-            ApplyState();
+            ClearTracking();
+
+            RequestSerialization();
+
+            updateLoop.enabled = true;
+            obj_renderRelay.SetActive(true);
+
+            if (targetPlayerId >= 0 && TargetPlayerValid())
+            {
+                BoneScan(VRCPlayerApi.GetPlayerById(targetPlayerId));
+            }
+
+            // Suppress the desktop trigger-press-on-pickup
+            trigger_wasHeld[0] = trigger_wasHeld[1] = true;
         }
 
-        #region Synced data
+        public void _a_OnDrop()
+        {
+            isHeldLocally = false;
 
-        [UdonSynced]
-        bool tracking, heldSynced;
+            Debug.Log($"_a_OnDrop o={Networking.IsOwner(gameObject)} tpi={targetPlayerId} tbi={targetBoneId}");
+            if (Networking.IsOwner(gameObject))
+            {
+                if (targetPlayerId >= 0 && tracking)
+                {
+                    TrackBone(targetPlayerId, targetBoneId);
+                    RequestSerialization();
+                } else
+                {
+                    ClearTracking();
+                    RequestSerialization();
+                }
+            }
 
-        // -1 when not tracking
-        [UdonSynced]
-        int trackingPlayerId;
-        [UdonSynced]
-        int trackingBoneId;
+            t_boneModelRoot.gameObject.SetActive(false);
+            t_traceMarker.gameObject.SetActive(false);
 
-        // These offsets describe the position and rotation of the model within the t_boneProxy local coordinate space
-        [UdonSynced]
-        Vector3 positionOffset;
-        [UdonSynced]
-        Quaternion rotationOffset;
+            SetPickupPerms();
+        }
+
+        public override void OnOwnershipTransferred(VRCPlayerApi newOwner)
+        {
+            // This may cancel tracking or force drop as needed
+            UpdateTracking();
+        }
+
+        #endregion
+
+        #region Update loop
+
+        public void _a_PreRender()
+        {
+            // Avoid updating every frame when offscreen
+            nextPrerenderFrame = Time.frameCount + 5;
+            UpdateTracking();
+        }
+
+        public void _a_Update()
+        {
+            if (isHeldLocally)
+            {
+                UpdateHeld();
+            } else if (nextPrerenderFrame < Time.frameCount)
+            {
+                UpdateTracking();
+
+                Debug.Log($"=== update: held={isHeldLocally}");
+            }
+        }
 
         #endregion
 
         #region State management and bone position update loop
 
-        public override void OnOwnershipTransferred(VRCPlayerApi newOwner)
-        {
-            ApplyState();
-        }
-
-        bool checkHeldActive;
-
-        public void _CheckHeld()
-        {
-            checkHeldActive = false;
-            ApplyState();
-        }
-
-        public void ApplyState() {
-            var currentHolder = pickup.currentPlayer;
-
-            bool enable_update;
-            bool enable_prerender;
-
-            if (Utilities.IsValid(currentHolder))
-            {
-                // Do not sync to the bone
-                t_pickup.parent = transform;
-
-                if (currentHolder.isLocal)
-                {
-                    Debug.Log("ApplyState: Active holder is local");
-                    enable_update = true;
-                } else 
-                {
-                    Debug.Log("ApplyState: Active holder is remote");
-                    t_boneRootModel.gameObject.SetActive(false);
-                    markClosestPoint.gameObject.SetActive(false);
-                    t_traceMarker.gameObject.SetActive(false);
-                    enable_update = false;
-
-                    if (!checkHeldActive)
-                    {
-                        checkHeldActive = true;
-                        SendCustomEventDelayedSeconds("_CheckHeld", 0.25f);
-                    }
-                }
-                enable_prerender = false;
-            } else if (tracking)
-            {
-                Debug.Log("ApplyState: Tracking");
-                // Sync to the bone
-                UpdateBoneProxy();
-
-                // Reparent preserving world position
-                t_pickup.parent = t_boneProxy;
-
-                // If the synced values are for a non-held state, we can apply them (they should be up to date, or will be soon)
-                ApplyOffsets();
-
-                enable_update = true;
-                enable_prerender = true;
-
-                t_boneRootModel.gameObject.SetActive(false);
-                markClosestPoint.gameObject.SetActive(false);
-                t_traceMarker.gameObject.SetActive(false);
-            } else
-            {
-                Debug.Log("ApplyState: Not tracking");
-                // Not tracking.
-                t_pickup.parent = transform;
-
-                enable_update = false;
-                enable_prerender = false;
-
-                t_boneRootModel.gameObject.SetActive(false);
-                markClosestPoint.gameObject.SetActive(false);
-                t_traceMarker.gameObject.SetActive(false);
-            }
-
-            SetPickupPerms();
-
-            mr_pickup_proxy.enabled = enable_prerender;
-            updateLoop.enabled = enable_update;
-        }
-
         void SetPickupPerms()
         {
-            if (!tracking || VRCPlayerApi.GetPlayerCount() == 1)
+            if (isHeldLocally) return;
+            
+            if (targetPlayerId == -1 || VRCPlayerApi.GetPlayerCount() == 1)
             {
                 pickup.pickupable = true;
             } else
             {
-                bool isTarget = Networking.LocalPlayer.playerId == trackingPlayerId;
+                bool isTarget = Networking.LocalPlayer.playerId == sync_targetPlayer;
                 bool isOwner = Networking.IsOwner(gameObject);
                 bool isOther = !(isTarget || isOwner);
 
@@ -451,97 +681,14 @@ namespace net.fushizen.attachable
             }
         }
 
-        public void _a_Update()
-        {
-            var currentHolder = pickup.currentPlayer;
-            if (Utilities.IsValid(currentHolder))
-            {
-                if (currentHolder.isLocal)
-                {
-                    UpdateHeld();
-                }
-            } else if (tracking)
-            {
-                UpdateBoneProxy();
-                ApplyOffsets();
-            } else
-            {
-                // Error state
-                ApplyState();
-            }
-        }
-
-        public void _a_PreRender()
-        {
-            // Adjust position just before rendering to fix up FinalIK weirdness
-            UpdateBoneProxy();
-            ApplyOffsets();
-        }
-
-        void ApplyOffsets()
-        {
-            Debug.Log($"ApplyOffsets: HS={heldSynced}");
-            if (!heldSynced)
-            {
-                t_pickup.localPosition = positionOffset;
-                t_pickup.localRotation = rotationOffset;
-            }
-        }
-
-        void UpdateBoneProxy()
-        {
-            VRCPlayerApi player = VRCPlayerApi.GetPlayerById(trackingPlayerId);
-            if (player == null || !Utilities.IsValid(player) || trackingBoneId < 0 || trackingBoneId >= bone_targets.Length)
-            {
-                if (!Networking.IsOwner(gameObject)) return;
-                tracking = false;
-                RequestSerialization();
-                return;
-            }
-
-            var bone = (HumanBodyBones)bone_targets[trackingBoneId];
-            var bonePos = player.GetBonePosition(bone);
-
-            if (bonePos.sqrMagnitude < 0.001)
-            {
-                if (!Networking.IsOwner(gameObject)) return;
-                tracking = false;
-                RequestSerialization();
-                return;
-            }
-
-            t_boneProxy.position = bonePos;
-            t_boneProxy.rotation = player.GetBoneRotation(bone);
-        }
         #endregion
 
         #region Serialization
 
         public override void OnDeserialization()
         {
-            var holder = pickup.currentPlayer;
-            var holderName = Utilities.IsValid(holder) ? $"{holder.playerId}" : "<none>";
-
-            Debug.Log($"OnDS: t={tracking} hs={heldSynced} ch={holderName}");
-            var curHolder = pickup.currentPlayer;
-            if (curHolder != null && curHolder.isLocal)
-            {
-                // Take back ownership
-                _a_OnPickup();
-            } else
-            {
-                ApplyState();
-            }
-        }
-
-        public override void OnPreSerialization()
-        {
-            if (heldSynced && !Networking.LocalPlayer.Equals(pickup.currentPlayer))
-            {
-                // Something has gone terribly wrong, reset.
-                heldSynced = tracking = false;
-                ApplyState();
-            }
+            UpdateTracking();
+            SetPickupPerms();
         }
 
         public override void OnPlayerJoined(VRCPlayerApi player)
@@ -660,7 +807,7 @@ namespace net.fushizen.attachable
             for (int i = 0; i < nBones; i++)
             {
                 boneDistance = 999;
-                bool success = DistanceToBone(player, t_pickup.position, t_pickup.TransformDirection(Vector3.forward), i);
+                bool success = DistanceToBone(player, i);
 
                 if (success && boneDistance <= prefBoneDistances[0] * secondaryCandidateMult)
                 {
@@ -676,119 +823,28 @@ namespace net.fushizen.attachable
 
         #endregion
 
-
-        #region Held controls
-
-        float closestBoneDistance;
-
-        public void _a_OnPickup()
-        {
-            Debug.Log($"OnPickup o={Networking.IsOwner(pickup.gameObject)} t={tracking} cp={Networking.GetOwner(pickup.gameObject).playerId}/{pickup.currentPlayer.playerId}");
-            if (Networking.IsOwner(pickup.gameObject))
-            {
-                heldSynced = true;
-
-                Networking.SetOwner(Networking.LocalPlayer, gameObject);
-
-                if (tracking && TargetPlayerValid())
-                {
-                    BoneScan(VRCPlayerApi.GetPlayerById(trackingPlayerId));
-                }
-
-                RequestSerialization();
-
-                // Suppress the desktop trigger-press-on-pickup
-                trigger_wasHeld[0] = trigger_wasHeld[1] = true;
-            }
-
-            // Apply locally immediately (offset one frame to avoid breaking pickups) but also RPC it off to everyone else
-            // XXX: can this arrive before the pickup state updates? [answer: yes, and it's a problem]
-            SendCustomEventDelayedFrames("ApplyState", 1);
-            SendCustomNetworkEvent(VRC.Udon.Common.Interfaces.NetworkEventTarget.All, "ApplyState");
-        }
-
-        public void _a_OnDrop()
-        {
-            Debug.Log("=== OnDrop");
-            if (tracking)
-            {
-                UpdateBoneProxy(); // update bone proxy
-
-                positionOffset = t_boneProxy.InverseTransformPoint(t_pickup.position);
-                rotationOffset = Quaternion.Inverse(t_boneProxy.rotation) * t_pickup.rotation;
-
-                heldSynced = false;
-            } else
-            {
-                trackingPlayerId = -1;
-                trackingBoneId = -1;
-            }
-
-            if (Networking.IsOwner(pickup.gameObject))
-            {
-                Networking.SetOwner(Networking.LocalPlayer, gameObject);
-                RequestSerialization();
-            }
-
-            Debug.Log($"OnDrop: HS={heldSynced}");
-
-            SendCustomEventDelayedFrames("ApplyState", 1);
-            SendCustomNetworkEvent(VRC.Udon.Common.Interfaces.NetworkEventTarget.All, "ApplyState");
-        }
-
-        void DisplayBoneModel(VRCPlayerApi target)
-        {
-            string boneTarget = "<invalid>";
-            if (ComputeBonePosition(target, trackingBoneId))
-            {
-                boneTarget = bone_targets[trackingBoneId].ToString();
-                t_boneRootModel.position = selectedBoneRoot;
-
-                if (!boneHasChild)
-                {
-                    t_boneRootModel.localScale = new Vector3(0.1f, 0.1f, 0.1f);
-                    t_boneRootModel.rotation = Quaternion.identity;
-                    t_boneSelectorModel.gameObject.SetActive(false);
-                }
-                else
-                {
-                    t_boneRootModel.localScale = new Vector3(boneLength, boneLength, boneLength);
-                    t_boneRootModel.rotation = Quaternion.LookRotation(selectedBoneChildPos - selectedBoneRoot);
-                    t_boneSelectorModel.gameObject.SetActive(true);
-                    markBoneTarget.position = selectedBoneChildPos;
-                }
-
-                t_boneRootModel.gameObject.SetActive(true);
-
-                Vector3 traceTarget = Vector3.Lerp(selectedBoneRoot, selectedBoneChildPos, 0.5f);
-                Vector3 traceSource = t_pickup.position;
-                t_traceMarker.position = traceSource;
-                t_traceMarker.rotation = Quaternion.LookRotation(traceTarget - traceSource);
-                t_traceMarker.localScale = 
-                    transform.lossyScale.magnitude * Vector3.Distance(traceSource, traceTarget) * new Vector3(0.5f, 0.5f, 0.5f);
-                t_traceMarker.gameObject.SetActive(true);
-
-                mat_bone.SetColor("_WireColor", tracking ? Color.green : Color.blue);
-            }
-            else
-            {
-                t_boneRootModel.gameObject.SetActive(false);
-                t_traceMarker.gameObject.SetActive(false);
-            }
-        }
+        #region Player search
+        /// <summary>
+        /// Time of last player scan - similarly used to determine if we restart the player search from scratch.
+        /// </summary>
+        float lastPlayerSearch;
+        /// <summary>
+        /// Cached player array
+        /// </summary>
+        VRCPlayerApi[] playerArray;
+        /// <summary>
+        /// Number of valid players remaining in the array (starting from index 0)
+        /// </summary>
+        int playerCountInArray;
 
         bool TargetPlayerValid()
         {
-            var player = VRCPlayerApi.GetPlayerById(trackingPlayerId);
+            var player = VRCPlayerApi.GetPlayerById(targetPlayerId);
 
             if (!Utilities.IsValid(player)) return false;
 
             return Vector3.Distance(player.GetPosition(), pickup.transform.position) <= range;
         }
-
-        float lastPlayerSearch;
-        VRCPlayerApi[] playerArray;
-        int playerCountInArray;
 
         int FindPlayer()
         {
@@ -841,8 +897,10 @@ namespace net.fushizen.attachable
                     if (preferSelf)
                     {
                         Debug.Log("FNP: Select self");
-                        if (distance < range) {
-                            return playerId;
+                        if (distance < range)
+                        {
+                            bestIndex = i;
+                            break;
                         }
                     }
                     else if (i < playerCountInArray - 1)
@@ -853,7 +911,8 @@ namespace net.fushizen.attachable
                         playerArray[playerCountInArray - 1] = player;
                         playerArray[i] = tmp;
                         i--;
-                    } else
+                    }
+                    else
                     {
                         // Select only if we have no choice
                         if (bestIndex == -1 && distance < range)
@@ -862,7 +921,8 @@ namespace net.fushizen.attachable
                             bestDistance = distance;
                         }
                     }
-                } else
+                }
+                else
                 {
                     if (distance < bestDistance)
                     {
@@ -893,8 +953,8 @@ namespace net.fushizen.attachable
             if (!TargetPlayerValid())
             {
                 tracking = false;
-                trackingPlayerId = FindPlayer();
-                if (trackingPlayerId < 0)
+                targetPlayerId = FindPlayer();
+                if (targetPlayerId < 0)
                 {
                     if (tracking) RequestSerialization();
 
@@ -902,14 +962,14 @@ namespace net.fushizen.attachable
                 }
             }
 
-            VRCPlayerApi target = VRCPlayerApi.GetPlayerById(trackingPlayerId);
+            VRCPlayerApi target = VRCPlayerApi.GetPlayerById(targetPlayerId);
             if (!Utilities.IsValid(target))
             {
                 // Should be impossible...?
                 if (tracking)
                 {
                     tracking = false;
-                    trackingPlayerId = -1;
+                    targetPlayerId = -1;
                     RequestSerialization();
                 }
                 return null;
@@ -918,13 +978,59 @@ namespace net.fushizen.attachable
             return target;
         }
 
+        #endregion
+
+        #region Held controls
+
+        float closestBoneDistance;
+
+        void DisplayBoneModel(VRCPlayerApi target)
+        {
+            string boneTarget = "<invalid>";
+            if (ComputeBonePosition(target, targetBoneId))
+            {
+                boneTarget = bone_targets[targetBoneId].ToString();
+                t_boneModelRoot.position = selectedBoneRoot;
+
+                if (!boneHasChild)
+                {
+                    t_boneModelRoot.localScale = new Vector3(0.1f, 0.1f, 0.1f);
+                    t_boneModelRoot.rotation = Quaternion.identity;
+                    obj_boneModelBody.SetActive(false);
+                }
+                else
+                {
+                    t_boneModelRoot.localScale = new Vector3(boneLength, boneLength, boneLength);
+                    t_boneModelRoot.rotation = Quaternion.LookRotation(selectedBoneChildPos - selectedBoneRoot);
+                    obj_boneModelBody.SetActive(true);
+                }
+
+                t_boneModelRoot.gameObject.SetActive(true);
+
+                Vector3 traceTarget = Vector3.Lerp(selectedBoneRoot, selectedBoneChildPos, 0.5f);
+                Vector3 traceSource = t_pickup.position;
+                t_traceMarker.position = traceSource;
+                t_traceMarker.rotation = Quaternion.LookRotation(traceTarget - traceSource);
+                t_traceMarker.localScale = 
+                    transform.lossyScale.magnitude * Vector3.Distance(traceSource, traceTarget) * new Vector3(0.5f, 0.5f, 0.5f);
+                t_traceMarker.gameObject.SetActive(true);
+
+                mat_bone.SetColor("_WireColor", tracking ? Color.green : Color.blue);
+            }
+            else
+            {
+                t_boneModelRoot.gameObject.SetActive(false);
+                t_traceMarker.gameObject.SetActive(false);
+            }
+        }
+
         void UpdateHeld() {
             VRCPlayerApi player = UpdateTrackingPlayer();
             if (player == null)
             {
                 Debug.Log("=== No candidate players");
                 // No candidate players in range, disable display
-                t_boneRootModel.gameObject.SetActive(false);
+                t_boneModelRoot.gameObject.SetActive(false);
                 t_traceMarker.gameObject.SetActive(false);
                 return;
             }
@@ -940,15 +1046,15 @@ namespace net.fushizen.attachable
 
             // If locked, check if current bone is a valid target.
             bool needScan = !tracking
-                || !DistanceToBone(player, t_pickup.position, t_pickup.TransformDirection(Vector3.forward), trackingBoneId)
+                || !DistanceToBone(player, targetBoneId)
                 || boneDistance > closestBoneDistance * secondaryCandidateMult;
 
             if (needScan)
             {
                 BoneScan(player);
-                int priorId = trackingBoneId;
-                trackingBoneId = prefBoneLength > 0 ? prefBoneIds[0] : -1;
-                if (priorId != trackingBoneId) RequestSerialization();
+                int priorId = targetBoneId;
+                targetBoneId = prefBoneLength > 0 ? prefBoneIds[0] : -1;
+                if (priorId != targetBoneId) RequestSerialization();
             }
 
             DisplayBoneModel(player);
@@ -960,7 +1066,7 @@ namespace net.fushizen.attachable
             if (trigger_sameHand_lastChange + 5.0f < Time.timeSinceLevelLoad)
             {
                 // Perform new scan
-                var player = VRCPlayerApi.GetPlayerById(trackingPlayerId);
+                var player = VRCPlayerApi.GetPlayerById(targetPlayerId);
                 if (!Utilities.IsValid(player)) return;
 
                 BoneScan(player);
@@ -968,9 +1074,9 @@ namespace net.fushizen.attachable
                 if (prefBoneLength < 1)
                 {
                     tracking = false;
-                    trackingBoneId = -1;
+                    targetBoneId = -1;
                 } else {
-                    trackingBoneId = prefBoneIds[0];
+                    targetBoneId = prefBoneIds[0];
                 }
                 
                 return;
@@ -982,12 +1088,12 @@ namespace net.fushizen.attachable
                 // Find next bone
                 if (HeapPop() > -1)
                 {
-                    trackingBoneId = prefBoneIds[0];
+                    targetBoneId = prefBoneIds[0];
                     Debug.Log($"Pop: Bone distance {priorBoneDist}=>{prefBoneDistances[0]}@{bone_targets[prefBoneIds[0]]}");
                 }
                 else
                 {
-                    trackingBoneId = -1;
+                    targetBoneId = -1;
                 }
 
                 RequestSerialization();
@@ -995,7 +1101,7 @@ namespace net.fushizen.attachable
             else
             {
                 // Restart scan on next update frame
-                trackingBoneId = -1;
+                targetBoneId = -1;
             }
         }
 
@@ -1008,7 +1114,7 @@ namespace net.fushizen.attachable
             if (boneSelectTrigger)
             {
                 // Lock to bone
-                if (trackingBoneId >= 0)
+                if (targetBoneId >= 0)
                 {
                     if (tracking)
                     {
@@ -1021,11 +1127,11 @@ namespace net.fushizen.attachable
             } else
             {
                 // Change tracking player
-                if (trackingPlayerId < 0) return;
+                if (targetPlayerId < 0) return;
 
-                trackingPlayerId = FindPlayer();
+                targetPlayerId = FindPlayer();
                 tracking = false;
-                trackingBoneId = -1;
+                targetBoneId = -1;
             }
         }
 

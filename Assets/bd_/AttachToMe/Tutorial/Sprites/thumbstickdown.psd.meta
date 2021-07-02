@@ -1,0 +1,312 @@
+fileFormatVersion: 2
+guid: 6cfd9dab87ce55f4fb3bf3ecc888e7c6
+TextureImporter:
+  fileIDToRecycleName:
+    21300000: lmb
+    21300002: mmb
+    21300004: pulldown
+    21300006: leftmouse
+    21300008: middlemouse
+    21300010: thumbstickdown_2
+    21300012: selectbone
+    21300014: thumbstickdown_4
+    21300016: stickdown
+    21300018: thumbstickdown_6
+    21300020: selectperson
+    21300022: thumbstickdown_8
+    21300024: thumbstickdown_9
+  externalObjects: {}
+  serializedVersion: 9
+  mipmaps:
+    mipMapMode: 0
+    enableMipMap: 0
+    sRGBTexture: 1
+    linearTexture: 0
+    fadeOut: 0
+    borderMipMap: 0
+    mipMapsPreserveCoverage: 0
+    alphaTestReferenceValue: 0.5
+    mipMapFadeDistanceStart: 1
+    mipMapFadeDistanceEnd: 3
+  bumpmap:
+    convertToNormalMap: 0
+    externalNormalMap: 0
+    heightScale: 0.25
+    normalMapFilter: 0
+  isReadable: 0
+  streamingMipmaps: 0
+  streamingMipmapsPriority: 0
+  grayScaleToAlpha: 0
+  generateCubemap: 6
+  cubemapConvolution: 0
+  seamlessCubemap: 0
+  textureFormat: 1
+  maxTextureSize: 2048
+  textureSettings:
+    serializedVersion: 2
+    filterMode: -1
+    aniso: -1
+    mipBias: -100
+    wrapU: 1
+    wrapV: 1
+    wrapW: -1
+  nPOTScale: 0
+  lightmap: 0
+  compressionQuality: 50
+  spriteMode: 2
+  spriteExtrude: 1
+  spriteMeshType: 1
+  alignment: 0
+  spritePivot: {x: 0.5, y: 0.5}
+  spritePixelsToUnits: 100
+  spriteBorder: {x: 0, y: 0, z: 0, w: 0}
+  spriteGenerateFallbackPhysicsShape: 1
+  alphaUsage: 1
+  alphaIsTransparency: 1
+  spriteTessellationDetail: -1
+  textureType: 8
+  textureShape: 1
+  singleChannelComponent: 0
+  maxTextureSizeSet: 0
+  compressionQualitySet: 0
+  textureFormatSet: 0
+  platformSettings:
+  - serializedVersion: 2
+    buildTarget: DefaultTexturePlatform
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    androidETC2FallbackOverride: 0
+  - serializedVersion: 2
+    buildTarget: Standalone
+    maxTextureSize: 1024
+    resizeAlgorithm: 0
+    textureFormat: 12
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 1
+    androidETC2FallbackOverride: 0
+  - serializedVersion: 2
+    buildTarget: Android
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    androidETC2FallbackOverride: 0
+  spriteSheet:
+    serializedVersion: 2
+    sprites:
+    - serializedVersion: 2
+      name: leftmouse
+      rect:
+        serializedVersion: 2
+        x: 11
+        y: 797
+        width: 292
+        height: 214
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: d2ee4a8604dd36548baecee3f9613d0c
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: middlemouse
+      rect:
+        serializedVersion: 2
+        x: 321
+        y: 797
+        width: 296
+        height: 214
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 9f0c01740b0d6804a95d100c62217a9e
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: selectbone
+      rect:
+        serializedVersion: 2
+        x: 673
+        y: 809
+        width: 308
+        height: 195
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 44b5143e765b1c345a95f74ae10ad9fe
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: stickdown
+      rect:
+        serializedVersion: 2
+        x: 13
+        y: 0
+        width: 1011
+        height: 667
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline:
+      - - {x: 369, y: -232}
+        - {x: 465, y: -134}
+        - {x: 463, y: -118}
+        - {x: 363, y: -120}
+        - {x: 361, y: -36}
+        - {x: 351, y: 98}
+        - {x: 321, y: 196}
+        - {x: 303, y: 222}
+        - {x: 200.24103, y: 221.47589}
+        - {x: 107.52411, y: 219.47589}
+        - {x: 109, y: 184}
+        - {x: 115.52411, y: 168}
+        - {x: 119, y: 144}
+        - {x: 131.63452, y: 96}
+        - {x: 137, y: 32}
+        - {x: 139.84137, y: -28}
+        - {x: 140.68274, y: -120.84137}
+        - {x: 39, y: -122}
+        - {x: 43, y: -154}
+        - {x: 97, y: -204}
+        - {x: 216.36548, y: -324}
+        - {x: 245, y: -324}
+      - - {x: -73, y: -184}
+        - {x: -43, y: -180}
+        - {x: -27, y: -172}
+        - {x: -11, y: -154}
+        - {x: 15, y: -128}
+        - {x: 21, y: -112}
+        - {x: 25, y: -86}
+        - {x: 23, y: -78}
+        - {x: 15, y: -60}
+        - {x: 5, y: -40}
+        - {x: -15, y: -26}
+        - {x: -19, y: -18}
+        - {x: 1, y: -2}
+        - {x: 21, y: 12}
+        - {x: 33, y: 38}
+        - {x: 49, y: 56}
+        - {x: 47, y: 66}
+        - {x: 55, y: 84}
+        - {x: 55, y: 162}
+        - {x: 47, y: 188}
+        - {x: 39, y: 204}
+        - {x: 33, y: 220}
+        - {x: 25, y: 236}
+        - {x: 13, y: 248}
+        - {x: -11, y: 262}
+        - {x: -15, y: 276}
+        - {x: -31, y: 282}
+        - {x: -43, y: 296}
+        - {x: -59, y: 304}
+        - {x: -109, y: 318}
+        - {x: -133, y: 326}
+        - {x: -145, y: 328}
+        - {x: -161, y: 333.5}
+        - {x: -309, y: 333.5}
+        - {x: -335, y: 328}
+        - {x: -351, y: 316}
+        - {x: -391, y: 304}
+        - {x: -407, y: 296}
+        - {x: -431, y: 280}
+        - {x: -447, y: 264}
+        - {x: -481, y: 220}
+        - {x: -497, y: 196}
+        - {x: -503, y: 168}
+        - {x: -505, y: 162}
+        - {x: -505, y: 76}
+        - {x: -497, y: 56}
+        - {x: -481, y: 36}
+        - {x: -483, y: 24}
+        - {x: -461, y: 8}
+        - {x: -455, y: -50}
+        - {x: -463, y: -48}
+        - {x: -477, y: -80}
+        - {x: -475, y: -106}
+        - {x: -467, y: -136}
+        - {x: -457, y: -140}
+        - {x: -437, y: -162}
+        - {x: -407, y: -178}
+        - {x: -367, y: -194}
+        - {x: -347, y: -194}
+        - {x: -317, y: -218}
+        - {x: -285, y: -226}
+        - {x: -245, y: -230}
+        - {x: -213, y: -234}
+        - {x: -203, y: -234}
+        - {x: -191, y: -228}
+        - {x: -163, y: -226}
+        - {x: -117, y: -202}
+      physicsShape: []
+      tessellationDetail: 0.26
+      bones: []
+      spriteID: ba43f92bf4e397344a8654af2b17c1c8
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: selectperson
+      rect:
+        serializedVersion: 2
+        x: 674
+        y: 590
+        width: 308
+        height: 195
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 8355894fc47604a459485986122c4f05
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    outline: []
+    physicsShape: []
+    bones: []
+    spriteID: 72fce34264c789c4f8452742187d07ac
+    vertices: []
+    indices: 
+    edges: []
+    weights: []
+  spritePackingTag: 
+  pSDRemoveMatte: 0
+  pSDShowRemoveMatteOption: 1
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

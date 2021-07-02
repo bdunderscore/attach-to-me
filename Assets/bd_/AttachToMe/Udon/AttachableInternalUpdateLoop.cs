@@ -7,7 +7,8 @@ using VRC.Udon;
 namespace net.fushizen.attachable
 {
     [UdonBehaviourSyncMode(BehaviourSyncMode.Manual)]
-    public class UpdateLoop : UdonSharpBehaviour
+    [DefaultExecutionOrder(1)]
+    public class AttachableInternalUpdateLoop : UdonSharpBehaviour
     {
         Attachable a;
         void Start()

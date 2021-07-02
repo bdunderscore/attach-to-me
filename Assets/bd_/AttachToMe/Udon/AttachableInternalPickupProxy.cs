@@ -6,7 +6,9 @@ using VRC.Udon;
 
 namespace net.fushizen.attachable
 {
-    public class PickupProxy : UdonSharpBehaviour
+    [AddComponentMenu("Attachable Internal/PickupProxy")]
+    [DefaultExecutionOrder(1)]
+    public class AttachableInternalPickupProxy : UdonSharpBehaviour
     {
         Attachable a;
 
