@@ -56,6 +56,9 @@ namespace net.fushizen.attachable
         public bool perm_removeOwner = true;
         public bool perm_removeOther = true;
 
+        public Animator c_animator;
+        public string anim_onTrack, anim_onHeld, anim_onTrackLocal, anim_onHeldLocal;
+
         #endregion
 
         #region Support object references
@@ -116,6 +119,10 @@ namespace net.fushizen.attachable
         [UdonSynced]
         int sync_seqno;
 
+        // Held remotely
+        [UdonSynced]
+        bool sync_heldRemote;
+
         // Last applied state sequence number (triggers lerping transition)
         int last_seqno;
 
@@ -170,9 +177,10 @@ namespace net.fushizen.attachable
             proxy._a_SetController(this);
             pickup = (VRC_Pickup) t_pickup.GetComponent(typeof(VRC_Pickup));
 
-            renderRelay = t_support.Find("Render Relay").GetComponent<AttachableInternalRenderRelay>();
-            t_renderRelay = renderRelay.transform;
+            t_renderRelay = t_support.Find("Render Relay");
+            renderRelay = t_renderRelay.GetComponent<AttachableInternalRenderRelay>();
             renderRelay.parent = this;
+            obj_renderRelay = t_renderRelay.gameObject;
 
             t_traceMarker = t_support.Find("TraceMarker");
             t_boneModelRoot = t_support.Find("BoneMarkerRoot");
@@ -189,14 +197,12 @@ namespace net.fushizen.attachable
             trigger_wasHeld = new bool[2];
 
             InitBoneData();
+            InitAnimator();
             SetupReferences();
 
             ClearTracking();
 
             updateLoop.enabled = false;
-
-            UpdateTracking();
-            SetPickupPerms();
         }
 
 
@@ -218,6 +224,8 @@ namespace net.fushizen.attachable
 
             updateLoop.enabled = false;
             obj_renderRelay.SetActive(false);
+            SetPickupPerms();
+            _a_SyncAnimator();
 
             sync_seqno++;
         }
@@ -250,6 +258,8 @@ namespace net.fushizen.attachable
 
             updateLoop.enabled = true;
             obj_renderRelay.SetActive(true);
+            SetPickupPerms();
+            _a_SyncAnimator();
 
             Debug.Log($"Tracked bone pid={targetPlayerId} bid={targetBoneId} pos={sync_pos} rot={sync_rot} seq={sync_seqno}");
 
@@ -325,6 +335,7 @@ namespace net.fushizen.attachable
                 transitionRotation = t_pickup.rotation;
                 transitionEndTime = Time.timeSinceLevelLoad + transitionDuration;
                 last_seqno = sync_seqno;
+                _a_SyncAnimator();
             }
 
             if (transitionEndTime > Time.timeSinceLevelLoad)
@@ -582,6 +593,7 @@ namespace net.fushizen.attachable
         {
             Networking.SetOwner(Networking.LocalPlayer, gameObject);
 
+            sync_heldRemote = true;
             isHeldLocally = true;
 
             // Save target bones
@@ -602,6 +614,8 @@ namespace net.fushizen.attachable
 
             // Suppress the desktop trigger-press-on-pickup
             trigger_wasHeld[0] = trigger_wasHeld[1] = true;
+
+            _a_SyncAnimator();
         }
 
         public void _a_OnDrop()
@@ -611,6 +625,8 @@ namespace net.fushizen.attachable
             Debug.Log($"_a_OnDrop o={Networking.IsOwner(gameObject)} tpi={targetPlayerId} tbi={targetBoneId}");
             if (Networking.IsOwner(gameObject))
             {
+                sync_heldRemote = false;
+
                 if (targetPlayerId >= 0 && tracking)
                 {
                     TrackBone(targetPlayerId, targetBoneId);
@@ -626,12 +642,21 @@ namespace net.fushizen.attachable
             t_traceMarker.gameObject.SetActive(false);
 
             SetPickupPerms();
+
+            // The change in the currently-held-player flag seems to be delayed one frame
+            SendCustomEventDelayedFrames(nameof(_a_SyncAnimator), 1);
         }
 
         public override void OnOwnershipTransferred(VRCPlayerApi newOwner)
         {
             // This may cancel tracking or force drop as needed
             UpdateTracking();
+            if (sync_heldRemote && !isHeldLocally)
+            {
+                sync_heldRemote = false;
+                RequestSerialization();
+            }
+            _a_SyncAnimator();
         }
 
         #endregion
@@ -689,11 +714,17 @@ namespace net.fushizen.attachable
         {
             UpdateTracking();
             SetPickupPerms();
+            _a_SyncAnimator();
         }
 
         public override void OnPlayerJoined(VRCPlayerApi player)
         {
             if (Networking.IsOwner(gameObject)) RequestSerialization();
+
+            // This is mostly just to initialize things once networking is up and running
+            UpdateTracking();
+            SetPickupPerms();
+            _a_SyncAnimator();
         }
 
         #endregion
@@ -1170,6 +1201,31 @@ namespace net.fushizen.attachable
                 _a_OnTriggerChanged(false, trigger_wasHeld[1]);
                 trigger_wasHeld[1] = userSelectTrigger;
             }
+        }
+
+        #endregion
+
+        #region Animator sync
+
+        void InitAnimator()
+        {
+            Debug.Log($"InitAnimator()");
+            if (anim_onTrack.Equals("")) anim_onTrack = null;
+            if (anim_onTrackLocal.Equals("")) anim_onTrackLocal = null;
+            if (anim_onHeld.Equals("")) anim_onHeld = null;
+            if (anim_onHeldLocal.Equals("")) anim_onHeldLocal = null;
+        }
+
+        void _a_SyncAnimator()
+        {
+            Debug.Log($"SyncAnimator isnull={c_animator == null}");
+
+            if (c_animator == null) return;
+
+            if (anim_onTrack != null) c_animator.SetBool(anim_onTrack, sync_targetPlayer >= 0);
+            if (anim_onTrackLocal != null) c_animator.SetBool(anim_onTrackLocal, sync_targetPlayer == Networking.LocalPlayer.playerId);
+            if (anim_onHeld != null) c_animator.SetBool(anim_onHeld, sync_heldRemote);
+            if (anim_onHeldLocal != null) c_animator.SetBool(anim_onHeldLocal, isHeldLocally);
         }
 
         #endregion

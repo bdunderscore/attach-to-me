@@ -15,6 +15,7 @@ namespace net.fushizen.attachable
         bool show_general = true;
         bool show_selection = true;
         bool show_perms = true;
+        bool show_animator = false;
 
         SerializedProperty m_t_pickup;
         SerializedProperty m_t_attachmentDirection;
@@ -27,6 +28,9 @@ namespace net.fushizen.attachable
         SerializedProperty m_perm_removeTracee;
         SerializedProperty m_perm_removeOwner;
         SerializedProperty m_perm_removeOther;
+
+        SerializedProperty m_c_animator;
+        SerializedProperty m_anim_onTrack, m_anim_onTrackLocal, m_anim_onHeld, m_anim_onHeldLocal;
 
         struct Strings
         {
@@ -50,6 +54,12 @@ namespace net.fushizen.attachable
             public GUIContent m_perm_removeTracee;
             public GUIContent m_perm_removeOwner;
             public GUIContent m_perm_removeOther;
+
+            public GUIContent header_animator;
+            public GUIContent m_c_animator;
+            public GUIContent header_animator_flags;
+            public GUIContent m_anim_onTrack, m_anim_onTrackLocal;
+            public GUIContent m_anim_onHeld, m_anim_onHeldLocal;
 
             public GUIContent header_internal;
 
@@ -82,6 +92,13 @@ namespace net.fushizen.attachable
                 header_internal = new GUIContent("内部設定"),
                 m_t_support = new GUIContent("サポートプレハブ"),
                 warn_missing = new GUIContent("必須項目です。"),
+                header_animator = new GUIContent("Animator連動設定"),
+                m_c_animator = new GUIContent("連動させるAnimator"),
+                header_animator_flags = new GUIContent("フラグパラメーター名"),
+                m_anim_onTrack = new GUIContent("トラッキング中フラグ"),
+                m_anim_onTrackLocal = new GUIContent("ローカルプレイヤーをﾄﾗｯｷﾝｸﾞ中"),
+                m_anim_onHeld = new GUIContent("誰かが持っているフラグ"),
+                m_anim_onHeldLocal = new GUIContent("ローカルで持っているフラグ"),
             };
 
             en = new Strings()
@@ -104,6 +121,13 @@ namespace net.fushizen.attachable
                 header_internal = new GUIContent("Internal settings"),
                 m_t_support = new GUIContent("Support prefab"),
                 warn_missing = new GUIContent("This field is required"),
+                header_animator = new GUIContent("Animator control configuration"),
+                m_c_animator = new GUIContent("Animator to control"),
+                header_animator_flags = new GUIContent("Flag parameter names"),
+                m_anim_onTrack = new GUIContent("Tracking bone"),
+                m_anim_onTrackLocal = new GUIContent("Tracking the local player's bone"),
+                m_anim_onHeld = new GUIContent("Held in hand"),
+                m_anim_onHeldLocal = new GUIContent("Held by local player"),
             };
         }
 
@@ -122,6 +146,12 @@ namespace net.fushizen.attachable
             m_perm_removeTracee = serializedObject.FindProperty("perm_removeTracee");
             m_perm_removeOwner = serializedObject.FindProperty("perm_removeOwner");
             m_perm_removeOther = serializedObject.FindProperty("perm_removeOther");
+
+            m_c_animator = serializedObject.FindProperty("c_animator");
+            m_anim_onHeld = serializedObject.FindProperty("anim_onHeld");
+            m_anim_onHeldLocal = serializedObject.FindProperty("anim_onHeldLocal");
+            m_anim_onTrack = serializedObject.FindProperty("anim_onTrack");
+            m_anim_onTrackLocal = serializedObject.FindProperty("anim_onTrackLocal");
         }
 
         public override void OnInspectorGUI()
@@ -236,6 +266,18 @@ namespace net.fushizen.attachable
                     }
                     EditorGUILayout.HelpBox(lang.warn_missing.text, MessageType.Error);
                 }
+            }
+
+            show_animator = EditorGUILayout.Foldout(show_animator, lang.header_animator);
+            if (show_animator)
+            {
+                EditorGUILayout.PropertyField(m_c_animator, lang.m_c_animator);
+                EditorGUILayout.Space();
+                EditorGUILayout.LabelField(lang.header_animator_flags);
+                EditorGUILayout.PropertyField(m_anim_onHeld, lang.m_anim_onHeld);
+                EditorGUILayout.PropertyField(m_anim_onHeldLocal, lang.m_anim_onHeldLocal);
+                EditorGUILayout.PropertyField(m_anim_onTrack, lang.m_anim_onTrack);
+                EditorGUILayout.PropertyField(m_anim_onTrackLocal, lang.m_anim_onTrackLocal);
             }
 
             serializedObject.ApplyModifiedProperties();

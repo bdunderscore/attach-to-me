@@ -20,7 +20,7 @@ namespace net.fushizen.attachable
                 UdonSharpGUI.DrawProgramSource(target))
                 return;
 
-            //DrawDefaultInspector();
+            DrawDefaultInspector();
             
             EditorGUILayout.LabelField("Please use the AttachableConfig component to configure this component.");
             if (!target.GetComponent<AttachableConfig>())

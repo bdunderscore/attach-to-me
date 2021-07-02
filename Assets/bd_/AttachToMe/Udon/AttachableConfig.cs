@@ -31,6 +31,9 @@ namespace net.fushizen.attachable
         public bool perm_removeOwner = true;
         public bool perm_removeOther = true;
 
+        public Animator c_animator;
+        public string anim_onTrack, anim_onHeld, anim_onTrackLocal, anim_onHeldLocal;
+
 #if UNITY_EDITOR
         private void OnValidate()
         {
@@ -52,6 +55,12 @@ namespace net.fushizen.attachable
             syncProp(ref anythingChanged, ref perm_removeOwner, ref attachable.perm_removeOwner);
             syncProp(ref anythingChanged, ref perm_removeOther, ref attachable.perm_removeOther);
 
+            syncProp(ref anythingChanged, ref c_animator, ref attachable.c_animator);
+            syncProp(ref anythingChanged, ref anim_onHeld, ref attachable.anim_onHeld);
+            syncProp(ref anythingChanged, ref anim_onHeldLocal, ref attachable.anim_onHeldLocal);
+            syncProp(ref anythingChanged, ref anim_onTrack, ref attachable.anim_onTrack);
+            syncProp(ref anythingChanged, ref anim_onTrackLocal, ref attachable.anim_onTrackLocal);
+
             if (anythingChanged)
             {
                 Undo.RecordObjects(new UnityEngine.Object[] { attachable, UdonSharpEditorUtility.GetBackingUdonBehaviour(attachable) }, "Sync attachable configuration");
@@ -59,6 +68,19 @@ namespace net.fushizen.attachable
             }
 
             isNewlyCreated = false;
+        }
+
+        private void syncProp(ref bool anythingChanged, ref string newVal, ref string oldVal)
+        {
+            if (isNewlyCreated)
+            {
+                newVal = oldVal;
+            }
+            else if ((newVal == null || oldVal == null) || (newVal != null && !newVal.Equals(oldVal)))
+            {
+                oldVal = newVal;
+                anythingChanged = true;
+            }
         }
 
         private void syncProp(ref bool anythingChanged, ref bool newVal, ref bool oldVal)
@@ -98,6 +120,21 @@ namespace net.fushizen.attachable
                 anythingChanged = true;
             }
         }
+
+
+        private void syncProp(ref bool anythingChanged, ref Animator newVal, ref Animator oldVal)
+        {
+            if (isNewlyCreated)
+            {
+                newVal = oldVal;
+            }
+            else if (newVal != oldVal)
+            {
+                oldVal = newVal;
+                anythingChanged = true;
+            }
+        }
+
 #endif
     }
 }
