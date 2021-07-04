@@ -12,8 +12,6 @@ namespace net.fushizen.attachable
     {
         Attachable a;
 
-        float suppressUseTime;
-
         void Start()
         {
 
@@ -31,13 +29,7 @@ namespace net.fushizen.attachable
 
         public override void OnPickup()
         {
-            suppressUseTime = Time.timeSinceLevelLoad;
             a._a_OnPickup();
-        }
-
-        private void OnPreRender()
-        {
-            a._a_PreRender();
         }
 
         public override void OnOwnershipTransferred(VRCPlayerApi player)

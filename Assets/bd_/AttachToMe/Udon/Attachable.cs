@@ -5,6 +5,10 @@ using VRC.SDKBase;
 using VRC.Udon;
 using VRC.Udon.Common;
 
+#if UNITY_EDITOR
+using UdonSharpEditor;
+using UnityEditor;
+#endif
 
 
 namespace net.fushizen.attachable
@@ -46,11 +50,14 @@ namespace net.fushizen.attachable
         public Transform t_pickup;
         public Transform t_attachmentDirection;
         public Transform t_support;
+        public AttachablesGlobalTracking globalTracking;
 
         public float range = 2;
         [Range(0,1)]
         public float directionality = 0;
         public bool preferSelf = true;
+        public bool trackOnUpdate = false;
+        public bool disableFingerSelection = false;
 
         public bool perm_removeTracee = true;
         public bool perm_removeOwner = true;
@@ -58,6 +65,13 @@ namespace net.fushizen.attachable
 
         public Animator c_animator;
         public string anim_onTrack, anim_onHeld, anim_onTrackLocal, anim_onHeldLocal;
+
+        #endregion
+
+        #region Global tracking object hooks
+
+        [HideInInspector]
+        public int _tracking_index = -1;
 
         #endregion
 
@@ -84,10 +98,6 @@ namespace net.fushizen.attachable
 
         /// Disablable update loop component
         AttachableInternalUpdateLoop updateLoop;
-
-        Transform t_renderRelay;
-        GameObject obj_renderRelay;
-        AttachableInternalRenderRelay renderRelay;
 
         #endregion
 
@@ -125,6 +135,20 @@ namespace net.fushizen.attachable
 
         // Last applied state sequence number (triggers lerping transition)
         int last_seqno;
+
+        #endregion
+
+        #region Misc state
+
+        bool allowAttachPickup;
+
+        /// <summary>
+        ///  We allow pickup for a short time after dropping the object, even if globally pickup of tracked objects is disabled.
+        ///  This time is the time at which this exception is no longer active.
+        /// </summary>
+        float forcePickupEnabledUntil = -999f;
+
+        readonly float PICKUP_GRACETIME = 4.0f;
 
         #endregion
 
@@ -169,6 +193,7 @@ namespace net.fushizen.attachable
 
         #endregion
 
+
         #region Initialization
 
         void SetupReferences()
@@ -176,11 +201,6 @@ namespace net.fushizen.attachable
             proxy = t_pickup.GetComponent<AttachableInternalPickupProxy>();
             proxy._a_SetController(this);
             pickup = (VRC_Pickup) t_pickup.GetComponent(typeof(VRC_Pickup));
-
-            t_renderRelay = t_support.Find("Render Relay");
-            renderRelay = t_renderRelay.GetComponent<AttachableInternalRenderRelay>();
-            renderRelay.parent = this;
-            obj_renderRelay = t_renderRelay.gameObject;
 
             t_traceMarker = t_support.Find("TraceMarker");
             t_boneModelRoot = t_support.Find("BoneMarkerRoot");
@@ -193,6 +213,8 @@ namespace net.fushizen.attachable
 
         void Start()
         {
+            globalTracking._a_Register(this);
+
             Debug.LogWarning($"radius={range}");
             trigger_wasHeld = new bool[2];
 
@@ -210,9 +232,6 @@ namespace net.fushizen.attachable
 
         #region Tracking
 
-        // We normally run in OnPreRender, but if PreRender isn't doing its job we need to fix things up.
-        int nextPrerenderFrame;
-
         /// <summary>
         /// Disables tracking in synced data (but does not actually request serialization)
         /// </summary>
@@ -223,8 +242,8 @@ namespace net.fushizen.attachable
             sync_targetPlayer = sync_targetBone = -1;
 
             updateLoop.enabled = false;
-            obj_renderRelay.SetActive(false);
-            SetPickupPerms();
+            globalTracking._a_DisableTracking(this);
+            _a_SetPickupPerms();
             _a_SyncAnimator();
 
             sync_seqno++;
@@ -257,8 +276,8 @@ namespace net.fushizen.attachable
             sync_seqno++;
 
             updateLoop.enabled = true;
-            obj_renderRelay.SetActive(true);
-            SetPickupPerms();
+            globalTracking._a_EnableTracking(this);
+            _a_SetPickupPerms();
             _a_SyncAnimator();
 
             Debug.Log($"Tracked bone pid={targetPlayerId} bid={targetBoneId} pos={sync_pos} rot={sync_rot} seq={sync_seqno}");
@@ -296,7 +315,7 @@ namespace net.fushizen.attachable
         /// Updates the pickup position to match tracked data.
         /// </summary>
         /// <returns>True if successful, false if tracking failed for some reason (eg, missing target or missing bone)</returns>
-        void UpdateTracking()
+        public void _a_UpdateTracking()
         {
             if (isHeldLocally)
             {
@@ -310,7 +329,16 @@ namespace net.fushizen.attachable
             var isTracking = (sync_targetPlayer >= 0);
 
             updateLoop.enabled = isHeldLocally || isTracking;
-            obj_renderRelay.SetActive(isTracking);
+            if (isTracking != (_tracking_index != -1))
+            {
+                if (isTracking)
+                {
+                    globalTracking._a_EnableTracking(this);
+                } else
+                {
+                    globalTracking._a_DisableTracking(this);
+                }
+            }
 
             if (!isTracking || isHeldLocally)
             {
@@ -348,7 +376,6 @@ namespace net.fushizen.attachable
             }
 
             t_pickup.SetPositionAndRotation(pos, rot);
-            t_renderRelay.position = pos;
         }
 
         #endregion
@@ -455,6 +482,7 @@ namespace net.fushizen.attachable
         bool ComputeBonePosition(VRCPlayerApi player, int targetIndex)
         {
             if (targetIndex < 0 || targetIndex >= bone_targets.Length) return false;
+            if (disableFingerSelection && targetIndex >= 19 && targetIndex < 49) return false;
 
             HumanBodyBones bone = (HumanBodyBones)bone_targets[targetIndex];
             int child = bone_child[targetIndex];
@@ -605,7 +633,7 @@ namespace net.fushizen.attachable
             RequestSerialization();
 
             updateLoop.enabled = true;
-            obj_renderRelay.SetActive(true);
+            globalTracking._a_DisableTracking(this);
 
             if (targetPlayerId >= 0 && TargetPlayerValid())
             {
@@ -641,7 +669,9 @@ namespace net.fushizen.attachable
             t_boneModelRoot.gameObject.SetActive(false);
             t_traceMarker.gameObject.SetActive(false);
 
-            SetPickupPerms();
+            forcePickupEnabledUntil = Time.timeSinceLevelLoad + (PICKUP_GRACETIME - 0.1f);
+            _a_SetPickupPerms();
+            SendCustomEventDelayedSeconds(nameof(_a_SetPickupPerms), PICKUP_GRACETIME);
 
             // The change in the currently-held-player flag seems to be delayed one frame
             SendCustomEventDelayedFrames(nameof(_a_SyncAnimator), 1);
@@ -650,7 +680,7 @@ namespace net.fushizen.attachable
         public override void OnOwnershipTransferred(VRCPlayerApi newOwner)
         {
             // This may cancel tracking or force drop as needed
-            UpdateTracking();
+            _a_UpdateTracking();
             if (sync_heldRemote && !isHeldLocally)
             {
                 sync_heldRemote = false;
@@ -663,23 +693,14 @@ namespace net.fushizen.attachable
 
         #region Update loop
 
-        public void _a_PreRender()
-        {
-            // Avoid updating every frame when offscreen
-            nextPrerenderFrame = Time.frameCount + 5;
-            UpdateTracking();
-        }
-
         public void _a_Update()
         {
             if (isHeldLocally)
             {
                 UpdateHeld();
-            } else if (nextPrerenderFrame < Time.frameCount)
+            } else
             {
-                UpdateTracking();
-
-                Debug.Log($"=== update: held={isHeldLocally}");
+                updateLoop.enabled = false;
             }
         }
 
@@ -687,11 +708,20 @@ namespace net.fushizen.attachable
 
         #region State management and bone position update loop
 
-        void SetPickupPerms()
+        public void _a_SetPickupEnabled(bool allowAttachPickup)
+        {
+            this.allowAttachPickup = allowAttachPickup;
+            _a_SetPickupPerms();
+        }
+
+        public void _a_SetPickupPerms()
         {
             if (isHeldLocally) return;
             
-            if (targetPlayerId == -1 || VRCPlayerApi.GetPlayerCount() == 1)
+            if (sync_targetPlayer >= 0 && !allowAttachPickup && Time.timeSinceLevelLoad >= forcePickupEnabledUntil)
+            {
+                pickup.pickupable = false;
+            } else if (targetPlayerId == -1 || VRCPlayerApi.GetPlayerCount() == 1)
             {
                 pickup.pickupable = true;
             } else
@@ -712,8 +742,8 @@ namespace net.fushizen.attachable
 
         public override void OnDeserialization()
         {
-            UpdateTracking();
-            SetPickupPerms();
+            _a_UpdateTracking();
+            _a_SetPickupPerms();
             _a_SyncAnimator();
         }
 
@@ -722,8 +752,8 @@ namespace net.fushizen.attachable
             if (Networking.IsOwner(gameObject)) RequestSerialization();
 
             // This is mostly just to initialize things once networking is up and running
-            UpdateTracking();
-            SetPickupPerms();
+            _a_UpdateTracking();
+            _a_SetPickupPerms();
             _a_SyncAnimator();
         }
 
@@ -1038,7 +1068,7 @@ namespace net.fushizen.attachable
 
                 t_boneModelRoot.gameObject.SetActive(true);
 
-                Vector3 traceTarget = Vector3.Lerp(selectedBoneRoot, selectedBoneChildPos, 0.5f);
+                Vector3 traceTarget = boneHasChild ? Vector3.Lerp(selectedBoneRoot, selectedBoneChildPos, 0.5f) : selectedBoneRoot;
                 Vector3 traceSource = t_pickup.position;
                 t_traceMarker.position = traceSource;
                 t_traceMarker.rotation = Quaternion.LookRotation(traceTarget - traceSource);

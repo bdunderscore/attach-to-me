@@ -24,6 +24,8 @@ namespace net.fushizen.attachable
         SerializedProperty m_range;
         SerializedProperty m_directionality;
         SerializedProperty m_preferSelf;
+        SerializedProperty m_disableFingerTracking;
+        SerializedProperty m_trackOnUpdate;
 
         SerializedProperty m_perm_removeTracee;
         SerializedProperty m_perm_removeOwner;
@@ -43,6 +45,7 @@ namespace net.fushizen.attachable
             public GUIContent header_selection;
             public GUIContent m_range;
             public GUIContent m_preferSelf;
+            public GUIContent m_disableFingerTracking;
 
             public GUIContent m_t_attachmentDirection;
             public GUIContent m_directionality;
@@ -66,6 +69,8 @@ namespace net.fushizen.attachable
             public GUIContent m_t_support;
 
             public GUIContent warn_direction, warn_missing;
+
+            public GUIContent m_trackOnUpdate;
         }
 
         Strings en, jp;
@@ -82,6 +87,7 @@ namespace net.fushizen.attachable
                 m_preferSelf = new GUIContent("自分を優先", "チェックが入った場合、自分自身を最初の選択候補として設定します。入ってない場合は自分が最後になります。"),
                 m_directionality = new GUIContent("指向性", "この数値をゼロ以上にすると、【方向マーカー】に指定されたオブジェクトのZ+方向の先にあるボーンを優先的に選択します。"),
                 m_t_attachmentDirection = new GUIContent("方向マーカー", "このオブジェクトのZ+方向と位置を基準にボーンの選択を行います"),
+                m_disableFingerTracking = new GUIContent("指ボーンに追従しない"),
                 warn_direction = new GUIContent("方向マーカーをプレハブの子に設定してください"),
                 header_pickup_perms = new GUIContent("取り外しできるプレイヤーの設定"),
                 header_pickup_perms_2 = new GUIContent("追尾しているピックアップを取り外せるプレイヤーを設定できます。"),
@@ -99,6 +105,8 @@ namespace net.fushizen.attachable
                 m_anim_onTrackLocal = new GUIContent("ローカルプレイヤーをﾄﾗｯｷﾝｸﾞ中"),
                 m_anim_onHeld = new GUIContent("誰かが持っているフラグ"),
                 m_anim_onHeldLocal = new GUIContent("ローカルで持っているフラグ"),
+
+                m_trackOnUpdate = new GUIContent("DynamicBone互換性", "Dynamic Boneがぷるぷるするときはチェック入れましょう（少しラグが発生します）"),
             };
 
             en = new Strings()
@@ -111,6 +119,7 @@ namespace net.fushizen.attachable
                 m_preferSelf = new GUIContent("Prefer self", "If selected, the player holding the pickup will be the first candidate player. If not, they will be the last."),
                 m_directionality = new GUIContent("Directionality", "If you set this value above zero, "),
                 m_t_attachmentDirection = new GUIContent("Direction marker", "This object's Z+ direction and position will be used as the basis for bone selection."),
+                m_disableFingerTracking = new GUIContent("Disable finger bone tracking"),
                 warn_direction = new GUIContent("Please ensure that the direction marker is a child of the pickup object."),
                 header_pickup_perms = new GUIContent("Removal permissions"),
                 header_pickup_perms_2 = new GUIContent("Select which players can remove a tracking pickup."),
@@ -128,6 +137,8 @@ namespace net.fushizen.attachable
                 m_anim_onTrackLocal = new GUIContent("Tracking the local player's bone"),
                 m_anim_onHeld = new GUIContent("Held in hand"),
                 m_anim_onHeldLocal = new GUIContent("Held by local player"),
+
+                m_trackOnUpdate = new GUIContent("DynamicBone compatibility", "Check this if a dynamic bone object vibrates when moving (this will result in some additional lag)"),
             };
         }
 
@@ -142,6 +153,8 @@ namespace net.fushizen.attachable
             m_range = serializedObject.FindProperty("range");
             m_directionality = serializedObject.FindProperty("directionality");
             m_preferSelf = serializedObject.FindProperty("preferSelf");
+            m_disableFingerTracking = serializedObject.FindProperty("disableFingerTracking");
+            m_trackOnUpdate = serializedObject.FindProperty("trackOnUpdate");
 
             m_perm_removeTracee = serializedObject.FindProperty("perm_removeTracee");
             m_perm_removeOwner = serializedObject.FindProperty("perm_removeOwner");
@@ -167,26 +180,34 @@ namespace net.fushizen.attachable
             }
 
             Transform t_pickup = null;
-            if (!isMultiple)
-            {
 
-                EditorGUILayout.Space();
-                show_general = EditorGUILayout.Foldout(show_general, lang.header_general);
-                if (show_general)
+            EditorGUILayout.Space();
+            show_general = EditorGUILayout.Foldout(show_general, lang.header_general);
+
+            if (show_general)
+            {
+                if (!isMultiple)
                 {
                     EditorGUILayout.PropertyField(m_t_pickup, lang.m_t_pickup);
-                }
 
-                t_pickup = (Transform)m_t_pickup.objectReferenceValue;
-                if (t_pickup == null)
-                {
-                    if (!show_general)
-                    {
-                        show_general = true;
-                        EditorUtility.SetDirty(target);
-                    }
-                    EditorGUILayout.HelpBox(lang.warn_missing.text, MessageType.Error);
+
                 }
+            }
+
+            t_pickup = (Transform)m_t_pickup.objectReferenceValue;
+            if (t_pickup == null)
+            {
+                if (!show_general)
+                {
+                    show_general = true;
+                    EditorUtility.SetDirty(target);
+                }
+                EditorGUILayout.HelpBox(lang.warn_missing.text, MessageType.Error);
+            }
+
+            if (show_general)
+            {
+                EditorGUILayout.PropertyField(m_trackOnUpdate, lang.m_trackOnUpdate);
 
                 EditorGUILayout.Space();
             }
@@ -232,6 +253,7 @@ namespace net.fushizen.attachable
             if (show_selection)
             {
                 EditorGUILayout.PropertyField(m_directionality, lang.m_directionality);
+                EditorGUILayout.PropertyField(m_disableFingerTracking, lang.m_disableFingerTracking);
             }
             
             EditorGUILayout.Space();
@@ -247,6 +269,18 @@ namespace net.fushizen.attachable
                 EditorGUILayout.PropertyField(m_perm_removeTracee, lang.m_perm_removeTracee);
                 EditorGUILayout.PropertyField(m_perm_removeOwner, lang.m_perm_removeOwner);
                 EditorGUILayout.PropertyField(m_perm_removeOther, lang.m_perm_removeOther);
+            }
+
+            show_animator = EditorGUILayout.Foldout(show_animator, lang.header_animator);
+            if (show_animator)
+            {
+                EditorGUILayout.PropertyField(m_c_animator, lang.m_c_animator);
+                EditorGUILayout.Space();
+                EditorGUILayout.LabelField(lang.header_animator_flags);
+                EditorGUILayout.PropertyField(m_anim_onHeld, lang.m_anim_onHeld);
+                EditorGUILayout.PropertyField(m_anim_onHeldLocal, lang.m_anim_onHeldLocal);
+                EditorGUILayout.PropertyField(m_anim_onTrack, lang.m_anim_onTrack);
+                EditorGUILayout.PropertyField(m_anim_onTrackLocal, lang.m_anim_onTrackLocal);
             }
 
             if (!isMultiple)
@@ -266,18 +300,6 @@ namespace net.fushizen.attachable
                     }
                     EditorGUILayout.HelpBox(lang.warn_missing.text, MessageType.Error);
                 }
-            }
-
-            show_animator = EditorGUILayout.Foldout(show_animator, lang.header_animator);
-            if (show_animator)
-            {
-                EditorGUILayout.PropertyField(m_c_animator, lang.m_c_animator);
-                EditorGUILayout.Space();
-                EditorGUILayout.LabelField(lang.header_animator_flags);
-                EditorGUILayout.PropertyField(m_anim_onHeld, lang.m_anim_onHeld);
-                EditorGUILayout.PropertyField(m_anim_onHeldLocal, lang.m_anim_onHeldLocal);
-                EditorGUILayout.PropertyField(m_anim_onTrack, lang.m_anim_onTrack);
-                EditorGUILayout.PropertyField(m_anim_onTrackLocal, lang.m_anim_onTrackLocal);
             }
 
             serializedObject.ApplyModifiedProperties();

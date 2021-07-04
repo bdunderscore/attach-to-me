@@ -26,6 +26,8 @@ namespace net.fushizen.attachable
         [Range(0, 1)]
         public float directionality = 0;
         public bool preferSelf = true;
+        public bool trackOnUpdate;
+        public bool disableFingerTracking;
 
         public bool perm_removeTracee = true;
         public bool perm_removeOwner = true;
@@ -51,6 +53,8 @@ namespace net.fushizen.attachable
             syncProp(ref anythingChanged, ref range, ref attachable.range);
             syncProp(ref anythingChanged, ref directionality, ref attachable.directionality);
             syncProp(ref anythingChanged, ref preferSelf, ref attachable.preferSelf);
+            syncProp(ref anythingChanged, ref trackOnUpdate, ref attachable.trackOnUpdate);
+            syncProp(ref anythingChanged, ref disableFingerTracking, ref attachable.disableFingerSelection);
             syncProp(ref anythingChanged, ref perm_removeTracee, ref attachable.perm_removeTracee);
             syncProp(ref anythingChanged, ref perm_removeOwner, ref attachable.perm_removeOwner);
             syncProp(ref anythingChanged, ref perm_removeOther, ref attachable.perm_removeOther);
