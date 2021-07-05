@@ -48,13 +48,12 @@ Shader "bd_/AttachToMe/TraceBeam"
                 float4 vertex : POSITION;
                 float2 uv : TEXCOORD0;
                 float4 normal : NORMAL;
-                float4 tangent : TANGENT;
             };
 
             struct v2f
             {
                 float4 worldPosAndScale : TEXCOORD0;
-                float3 worldTangentVec : TEXCOORD1;
+                float3 worldYvec : TEXCOORD1;
                 UNITY_FOG_COORDS(2)
                 float4 vertex : SV_POSITION;
             };
@@ -67,9 +66,7 @@ Shader "bd_/AttachToMe/TraceBeam"
                 v2f o;
                 o.vertex = UnityObjectToClipPos(v.vertex);
 
-                float3 bitangent = cross(v.tangent.xyz, v.normal.xyz);
-
-                o.worldTangentVec = normalize(mul(unity_ObjectToWorld, float4(bitangent, 0)));
+                o.worldYvec = normalize(mul(unity_ObjectToWorld, float4(0,1,0, 0)));
 
                 o.worldPosAndScale = mul(unity_ObjectToWorld, v.vertex);
 
@@ -90,7 +87,7 @@ Shader "bd_/AttachToMe/TraceBeam"
                 // sample the texture
                 fixed4 col = _Color;
 
-                float index = frac(dot(i.worldPosAndScale.xyz, i.worldTangentVec) / i.worldPosAndScale.w / _Scale + (_Time.y / _ScrollTime));
+                float index = frac(dot(i.worldPosAndScale.xyz, i.worldYvec) / i.worldPosAndScale.w / _Scale + (_Time.y / _ScrollTime));
                 float ramp = saturate(_Ramp * (2 * index - 1));
 
                 col *= ramp;
