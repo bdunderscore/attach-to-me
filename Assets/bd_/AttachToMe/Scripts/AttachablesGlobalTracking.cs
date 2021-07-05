@@ -62,7 +62,7 @@ namespace net.fushizen.attachable
         Attachable[] ResizeArray(Attachable[] oldArray, int newSize)
         {
             var newArray = new Attachable[newSize];
-            System.Array.Copy(attachables, newArray, oldArray.Length);
+            System.Array.Copy(oldArray, newArray, oldArray.Length);
             return newArray;
         }
 

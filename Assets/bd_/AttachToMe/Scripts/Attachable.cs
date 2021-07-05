@@ -443,6 +443,7 @@ namespace net.fushizen.attachable
         // Valid only in same frame as we started the bone scan.
         Vector3[] bone_positions;
         Quaternion[] bone_rotations;
+        int lastBonePosLoadFrame;
 
         int[] bone_child; // child to use for bone linearization, or -1 for sphere, or -2 for do not target
         int[] bone_parent; // parent of bone to use for bone size computation, or -1 for hips
@@ -642,6 +643,8 @@ namespace net.fushizen.attachable
         {
             Vector3 raySource = t_attachmentDirection.position;
 
+            if (bone_positions == null) return false;
+
             if (player.isLocal && player.Equals(pickup.currentPlayer))
             {
                 // Don't attach to the current hand
@@ -722,7 +725,8 @@ namespace net.fushizen.attachable
                     onHold._a_OnAttachedPickup();
                 }
 
-                BoneScan(VRCPlayerApi.GetPlayerById(targetPlayerId));
+                var player = VRCPlayerApi.GetPlayerById(targetPlayerId);
+                BoneScan(player);
             }
 
             // Suppress the desktop trigger-press-on-pickup
@@ -966,6 +970,31 @@ namespace net.fushizen.attachable
             return i;
         }
 
+        bool LoadBoneData(VRCPlayerApi player)
+        {
+            var bonePosReader = globalTracking.bonePosReader;
+            if (bonePosReader == null)
+            {
+                globalTracking._a_RespawnBoneReader();
+            }
+
+            bonePosReader.successful = false;
+            bonePosReader._a_AcquireAllBoneData(player, bone_targets);
+            if (!bonePosReader.successful)
+            {
+                // respawn the (potentially dead) bone reader if necessary
+                globalTracking._a_RespawnBoneReader();
+                // return zero bone candidates, so we'll move on to the next player.
+                return false;
+            }
+
+            bone_positions = bonePosReader.positions;
+            bone_rotations = bonePosReader.rotations;
+            lastBonePosLoadFrame = Time.frameCount;
+
+            return true;
+        }
+
         void BoneScan(VRCPlayerApi player)
         {
             int nBones = bone_targets.Length;
@@ -980,28 +1009,13 @@ namespace net.fushizen.attachable
             prefBoneLength = 0;
             prefBoneDistances[0] = 99999;
 
-            var bonePosReader = globalTracking.bonePosReader;
-            if (bonePosReader == null)
-            {
-                Debug.Log($"No boneposreader");
-            }
-
-            bonePosReader.successful = false;
-            bonePosReader._a_AcquireAllBoneData(player, bone_targets);
-            if (!bonePosReader.successful)
-            {
-                Debug.Log($"read failed");
-                // respawn the (potentially dead) bone reader if necessary
-                globalTracking._a_RespawnBoneReader();
-                // return zero bone candidates, so we'll move on to the next player.
-                return;
-            }
-
-            bone_positions = bonePosReader.positions;
-            bone_rotations = bonePosReader.rotations;
-
             float bestPrefDist = 9999;
             float bestTrueDist = 9999;
+
+            if (lastBonePosLoadFrame != Time.frameCount)
+            {
+                if (!LoadBoneData(player)) return;
+            }
 
             for (int i = 0; i < nBones; i++)
             {
@@ -1024,8 +1038,6 @@ namespace net.fushizen.attachable
                     HeapPush(i, boneDistance);
                 }
             }
-
-            Debug.Log($"Best candidate: dist={bestTrueDist} adjusted={bestPrefDist}");
 
             if (prefBoneLength > 0)
             {
@@ -1082,6 +1094,9 @@ namespace net.fushizen.attachable
 
         int FindNextPlayer()
         {
+            // invalidate bone data cache
+            lastBonePosLoadFrame = -1;
+
             float limit = range + PLAYER_LEEWAY;
             float bestDistance = limit;
             int bestIndex = -1;
@@ -1123,7 +1138,7 @@ namespace net.fushizen.attachable
                     else
                     {
                         // Select only if we have no choice
-                        if (bestIndex == -1 && distance < range)
+                        if (bestIndex == -1 && distance < limit)
                         {
                             bestIndex = i;
                             bestDistance = distance;
@@ -1193,6 +1208,9 @@ namespace net.fushizen.attachable
         void DisplayBoneModel(VRCPlayerApi target)
         {
             string boneTarget = "<invalid>";
+
+            if (bone_positions == null) return; // sanity check
+
             if (ComputeBonePosition(target, targetBoneId))
             {
                 boneTarget = bone_targets[targetBoneId].ToString();
@@ -1248,6 +1266,8 @@ namespace net.fushizen.attachable
                 tracking = false;
                 RequestSerialization();
             }
+
+            if (!LoadBoneData(player)) return;
 
             // If locked, check if current bone is a valid target.
             bool needScan = !tracking
