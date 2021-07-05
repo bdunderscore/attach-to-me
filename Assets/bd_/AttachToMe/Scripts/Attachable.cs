@@ -582,7 +582,7 @@ namespace net.fushizen.attachable
                 {
                     selectedBoneRoot = bone_positions[BONE_SPINE];
                     Vector3 displacement = betweenLegs - selectedBoneRoot;
-                    selectedBoneChildPos = selectedBoneRoot + displacement * 2; // why negative?
+                    selectedBoneChildPos = selectedBoneRoot + displacement * 2;
                     boneHasChild = true;
                 }
             } else if (targetIndex == 10)
@@ -746,15 +746,21 @@ namespace net.fushizen.attachable
             {
                 sync_heldRemote = false;
 
-                if (targetPlayerId >= 0 && tracking)
+                if (tracking)
                 {
-                    TrackBone(targetPlayerId, targetBoneId);
-                    RequestSerialization();
-                } else
-                {
-                    ClearTracking();
-                    RequestSerialization();
+                    // Confirm that the tracking target is valid.
+                    var player = VRCPlayerApi.GetPlayerById(targetPlayerId);
+
+                    tracking = Utilities.IsValid(player) && player != null
+                        && DistanceToBone(player, targetBoneId) && trueBoneDistance < range;
                 }
+
+                if (tracking) {
+                    TrackBone(targetPlayerId, targetBoneId);
+                } else {
+                    ClearTracking();
+                }
+                RequestSerialization();
             }
 
             t_boneModelRoot.gameObject.SetActive(false);
@@ -1211,7 +1217,8 @@ namespace net.fushizen.attachable
 
             if (bone_positions == null) return; // sanity check
 
-            if (ComputeBonePosition(target, targetBoneId))
+            // Distance is needed to show out-of-range warning
+            if (DistanceToBone(target, targetBoneId))
             {
                 boneTarget = bone_targets[targetBoneId].ToString();
                 t_boneModelRoot.position = selectedBoneRoot;
@@ -1239,7 +1246,19 @@ namespace net.fushizen.attachable
                     transform.lossyScale.magnitude * Vector3.Distance(traceSource, traceTarget) * new Vector3(0.5f, 0.5f, 0.5f) / globalTrackingScale;
                 t_traceMarker.gameObject.SetActive(true);
 
-                mat_bone.SetColor("_WireColor", tracking ? Color.green : Color.blue);
+                Color color = Color.blue;
+                if (tracking)
+                {
+                    if (trueBoneDistance >= range)
+                    {
+                        color = Color.red;
+                    } else
+                    {
+                        color = Color.green;
+                    }
+                }
+
+                mat_bone.SetColor("_WireColor", color);
             }
             else
             {
@@ -1279,7 +1298,12 @@ namespace net.fushizen.attachable
                 BoneScan(player);
                 int priorId = targetBoneId;
                 targetBoneId = prefBoneLength > 0 ? prefBoneIds[0] : -1;
-                if (priorId != targetBoneId) RequestSerialization();
+                if (priorId != targetBoneId)
+                {
+                    // Stop tracking, since we're forcing a bone change
+                    tracking = false;
+                    RequestSerialization();
+                }
             }
 
             DisplayBoneModel(player);
@@ -1288,12 +1312,18 @@ namespace net.fushizen.attachable
         /* BoneScan(player); */
         void NextBone()
         {
+            var player = VRCPlayerApi.GetPlayerById(targetPlayerId);
+            if (!Utilities.IsValid(player))
+            {
+                // reset scan
+                targetPlayerId = -1;
+                targetBoneId = -1;
+                return;
+            }
+
             if (trigger_sameHand_lastChange + 5.0f < Time.timeSinceLevelLoad)
             {
                 // Perform new scan
-                var player = VRCPlayerApi.GetPlayerById(targetPlayerId);
-                if (!Utilities.IsValid(player)) return;
-
                 BoneScan(player);
 
                 if (prefBoneLength < 1)
@@ -1307,9 +1337,8 @@ namespace net.fushizen.attachable
                 return;
             }
 
-            if (prefBoneLength > 1)
+            while (prefBoneLength > 1)
             {
-                var priorBoneDist = prefBoneDistances[0];
                 // Find next bone
                 if (HeapPop() > -1)
                 {
@@ -1317,16 +1346,27 @@ namespace net.fushizen.attachable
                 }
                 else
                 {
-                    targetBoneId = -1;
+                    break;
                 }
 
-                RequestSerialization();
+                // Check that bone is in range
+                if (!ComputeBonePosition(player, targetBoneId))
+                {
+                    continue;
+                }
+
+                if (trueBoneDistance >= range)
+                {
+                    continue;
+                }
+
+                // Ok, accept this candidate.
+                return;
             }
-            else
-            {
-                // Restart scan on next update frame
-                targetBoneId = -1;
-            }
+
+            // Restart scan on next update frame
+            targetBoneId = -1;
+            tracking = false;
         }
 
         void _a_OnTriggerChanged(bool boneSelectTrigger, bool prior)
