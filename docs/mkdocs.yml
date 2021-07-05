@@ -1,5 +1,6 @@
 site_name: Attach-To-Me for VRChat
 nav:
+  - Home: home.md
   - English: en.md
   - 日本語: jp.md
 theme:
