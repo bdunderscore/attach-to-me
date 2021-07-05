@@ -313,9 +313,22 @@ namespace net.fushizen.attachable
             {
                 return false;
             }
+            
+            if (sync_targetBone < 0 || sync_targetBone >= bone_targets.Length)
+                return false;
 
             var bone = (HumanBodyBones)bone_targets[sync_targetBone];
-            var bonePos = player.GetBonePosition(bone);
+
+            var reader = globalTracking.bonePosReader;
+            reader.successful = false;
+            reader._a_AcquireSingleBoneData(player, bone);
+            if (!reader.successful)
+            {
+                // The bone position reader will respawn on the next update tick. Until then, keep our last known good positions.
+                return true;
+            }
+
+            var bonePos = reader.singleBonePos;
 
             if (bonePos.sqrMagnitude < 0.001)
             {
@@ -324,7 +337,7 @@ namespace net.fushizen.attachable
             }
 
             this.bonePosition = bonePos;
-            this.boneRotation = player.GetBoneRotation(bone);
+            this.boneRotation = reader.singleBoneRot;
 
             return true;
         }
@@ -335,6 +348,8 @@ namespace net.fushizen.attachable
         /// <returns>True if successful, false if tracking failed for some reason (eg, missing target or missing bone)</returns>
         public void _a_UpdateTracking()
         {
+            if (globalTracking.bonePosReader == null) return;
+
             if (isHeldLocally)
             {
                 if (!Networking.IsOwner(gameObject))
@@ -401,8 +416,19 @@ namespace net.fushizen.attachable
         #region Bone data
 
         object[] bone_targets;
+
+        // Valid only in same frame as we started the bone scan.
+        Vector3[] bone_positions;
+        Quaternion[] bone_rotations;
+
         int[] bone_child; // child to use for bone linearization, or -1 for sphere, or -2 for do not target
         int[] bone_parent; // parent of bone to use for bone size computation, or -1 for hips
+
+        readonly int BONE_LEFT_UPPER_LEG = 1;
+        readonly int BONE_RIGHT_UPPER_LEG = 2;
+        readonly int BONE_SPINE = 7;
+        readonly int BONE_NECK = 9;
+        readonly int BONE_HEAD = 10;
 
         void InitBoneData()
         {
@@ -507,14 +533,14 @@ namespace net.fushizen.attachable
 
             if (child == -2) return false;
 
-            selectedBoneRoot = player.GetBonePosition(bone);
+            selectedBoneRoot = bone_positions[targetIndex];
             if (selectedBoneRoot.sqrMagnitude < 0.001f) return false;
 
             // Identify bone child point
             selectedBoneChildPos = Vector3.zero;
             while (child >= 0)
             {
-                selectedBoneChildPos = player.GetBonePosition((HumanBodyBones)bone_targets[child]);
+                selectedBoneChildPos = bone_positions[child];
                 if (selectedBoneChildPos.sqrMagnitude > 0.001) break;
                 child = bone_child[child];
             }
@@ -524,13 +550,13 @@ namespace net.fushizen.attachable
             if (targetIndex == 0)
             {
                 // Special handling for hips
-                Vector3 leftLeg = player.GetBonePosition(HumanBodyBones.LeftUpperLeg);
-                Vector3 rightLeg = player.GetBonePosition(HumanBodyBones.RightUpperLeg);
+                Vector3 leftLeg = bone_positions[BONE_LEFT_UPPER_LEG];
+                Vector3 rightLeg = bone_positions[BONE_RIGHT_UPPER_LEG];
                 Vector3 betweenLegs = Vector3.Lerp(leftLeg, rightLeg, 0.5f);
 
                 if (betweenLegs.sqrMagnitude > 0.001f)
                 {
-                    selectedBoneRoot = player.GetBonePosition(HumanBodyBones.Spine);
+                    selectedBoneRoot = bone_positions[BONE_SPINE];
                     Vector3 displacement = betweenLegs - selectedBoneRoot;
                     selectedBoneChildPos = selectedBoneRoot + displacement * 2; // why negative?
                     boneHasChild = true;
@@ -538,12 +564,12 @@ namespace net.fushizen.attachable
             } else if (targetIndex == 10)
             {
                 // Special handling for head. Extend the bone vector in whichever _local_ axis is best aligned with the neck-head direction
-                Vector3 neck = player.GetBonePosition(HumanBodyBones.Neck);
+                Vector3 neck = bone_positions[BONE_NECK];
                 Vector3 neckHeadRaw = selectedBoneRoot - neck;
                 Vector3 neckHead = neckHeadRaw.normalized;
 
 
-                Quaternion headRot = player.GetBoneRotation(HumanBodyBones.Head);
+                Quaternion headRot = bone_rotations[BONE_HEAD];
 
                 Vector3 bestAxis = headRot * Vector3.up;
                 float bestAxisLen = Mathf.Abs(Vector3.Dot(bestAxis, neckHead));
@@ -929,6 +955,16 @@ namespace net.fushizen.attachable
             prefBoneDistances = new float[bone_targets.Length];
             prefBoneLength = 0;
             prefBoneDistances[0] = 99999;
+
+            var bonePosReader = globalTracking.bonePosReader;
+            if (bonePosReader == null) return;
+
+            bonePosReader.successful = false;
+            bonePosReader._a_AcquireAllBoneData(player, bone_targets);
+            if (!bonePosReader.successful) return;
+
+            bone_positions = bonePosReader.positions;
+            bone_rotations = bonePosReader.rotations;
 
             for (int i = 0; i < nBones; i++)
             {

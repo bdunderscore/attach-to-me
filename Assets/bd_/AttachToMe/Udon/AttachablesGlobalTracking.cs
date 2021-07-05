@@ -32,6 +32,11 @@ namespace net.fushizen.attachable
         float lastAltPress;
         int altCounter;
 
+        [HideInInspector]
+        public AttachableBonePositionReader bonePosReader;
+
+        public GameObject bonePosReaderPrefab;
+
         void Start()
         {
             attachables = new Attachable[16];
@@ -109,8 +114,37 @@ namespace net.fushizen.attachable
             }
         }
 
+        private void RespawnBoneReader()
+        {
+            if (bonePosReader == null || bonePosReader._a_Watchdog(Time.frameCount) != Time.frameCount)
+            {
+                int lastPlayerId = -1;
+                if (bonePosReader != null)
+                {
+                    lastPlayerId = bonePosReader.lastPlayerId;
+                    Object.Destroy(bonePosReader.gameObject);
+                }
+
+                var gameObject = VRCInstantiate(bonePosReaderPrefab);
+                bonePosReader = gameObject.GetComponent<AttachableBonePositionReader>();
+                bonePosReader.suppressPlayerId = lastPlayerId;
+
+                SendCustomEventDelayedSeconds(nameof(_a_ClearSuppressedPlayer), 1.0f);
+            }
+        }
+
+        public void _a_ClearSuppressedPlayer()
+        {
+            if (bonePosReader != null)
+            {
+                bonePosReader.suppressPlayerId = -1;
+            }
+        }
+
         private void Update()
         {
+            RespawnBoneReader();
+
             var localPlayer = Networking.LocalPlayer;
             transform.position = localPlayer.GetTrackingData(VRCPlayerApi.TrackingDataType.Head).position;
 
