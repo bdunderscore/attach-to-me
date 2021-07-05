@@ -114,7 +114,7 @@ namespace net.fushizen.attachable
             }
         }
 
-        private void RespawnBoneReader()
+        public void _a_RespawnBoneReader()
         {
             if (bonePosReader == null || bonePosReader._a_Watchdog(Time.frameCount) != Time.frameCount)
             {
@@ -143,7 +143,7 @@ namespace net.fushizen.attachable
 
         private void Update()
         {
-            RespawnBoneReader();
+            _a_RespawnBoneReader();
 
             var localPlayer = Networking.LocalPlayer;
             transform.position = localPlayer.GetTrackingData(VRCPlayerApi.TrackingDataType.Head).position;

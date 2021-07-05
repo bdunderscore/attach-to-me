@@ -45,13 +45,19 @@ namespace net.fushizen.attachable
     [DefaultExecutionOrder(0)]
     public class Attachable : UdonSharpBehaviour
     {
+        /// <summary>
+        /// Additional range (in addition to the bone range) for searching for players; beyond this distance
+        /// (to capsule root) we'll skip the expensive bone analysis.
+        /// </summary>
+        private float PLAYER_LEEWAY = 2.0f;
+
         #region Inspector fields
 
         public Transform t_pickup;
         public Transform t_attachmentDirection;
         public AttachablesGlobalTracking globalTracking;
 
-        public float range = 2;
+        public float range = 0.5f;
         [Range(0,1)]
         public float directionality = 0;
         public bool preferSelf = true;
@@ -324,7 +330,9 @@ namespace net.fushizen.attachable
             reader._a_AcquireSingleBoneData(player, bone);
             if (!reader.successful)
             {
-                // The bone position reader will respawn on the next update tick. Until then, keep our last known good positions.
+                globalTracking._a_RespawnBoneReader(); // respawn it if it's dead.
+                // for now keep our last known good position. Once the player suppression is lifted
+                // we'll be able to resume querying.
                 return true;
             }
 
@@ -498,7 +506,7 @@ namespace net.fushizen.attachable
         }
 
         // pseudo-ref parameters
-        float boneDistance;
+        float boneDistance, trueBoneDistance;
         Vector3 nearestPointBone, nearestPointRay, selectedBoneRoot, selectedBoneChildPos;
         float boneLength;
         bool boneHasChild;
@@ -662,7 +670,8 @@ namespace net.fushizen.attachable
 
             var directionalVector = t_attachmentDirection.TransformDirection(Vector3.forward);
 
-            boneDistance = Vector3.Distance(nearestPointRay, nearestPointBone) - directionality * Mathf.Abs(Vector3.Dot(nearestPointBone - nearestPointRay, directionalVector));
+            trueBoneDistance = Vector3.Distance(nearestPointRay, nearestPointBone);
+            boneDistance = trueBoneDistance - directionality * Mathf.Abs(Vector3.Dot(nearestPointBone - nearestPointRay, directionalVector));
             
             return true;
         }
@@ -957,25 +966,51 @@ namespace net.fushizen.attachable
             prefBoneDistances[0] = 99999;
 
             var bonePosReader = globalTracking.bonePosReader;
-            if (bonePosReader == null) return;
+            if (bonePosReader == null)
+            {
+                Debug.Log($"No boneposreader");
+            }
 
             bonePosReader.successful = false;
             bonePosReader._a_AcquireAllBoneData(player, bone_targets);
-            if (!bonePosReader.successful) return;
+            if (!bonePosReader.successful)
+            {
+                Debug.Log($"read failed");
+                // respawn the (potentially dead) bone reader if necessary
+                globalTracking._a_RespawnBoneReader();
+                // return zero bone candidates, so we'll move on to the next player.
+                return;
+            }
 
             bone_positions = bonePosReader.positions;
             bone_rotations = bonePosReader.rotations;
+
+            float bestPrefDist = 9999;
+            float bestTrueDist = 9999;
 
             for (int i = 0; i < nBones; i++)
             {
                 boneDistance = 999;
                 bool success = DistanceToBone(player, i);
 
+                if (boneDistance < bestPrefDist)
+                {
+                    bestPrefDist = boneDistance;
+                    bestTrueDist = trueBoneDistance;
+                }
+
+                if (trueBoneDistance > range)
+                {
+                    continue;
+                }
+
                 if (success && boneDistance <= prefBoneDistances[0] * secondaryCandidateMult)
                 {
                     HeapPush(i, boneDistance);
                 }
             }
+
+            Debug.Log($"Best candidate: dist={bestTrueDist} adjusted={bestPrefDist}");
 
             if (prefBoneLength > 0)
             {
@@ -1005,7 +1040,7 @@ namespace net.fushizen.attachable
 
             if (!Utilities.IsValid(player)) return false;
 
-            return Vector3.Distance(player.GetPosition(), pickup.transform.position) <= range;
+            return Vector3.Distance(player.GetPosition(), pickup.transform.position) <= range + PLAYER_LEEWAY;
         }
 
         int FindPlayer()
@@ -1032,7 +1067,8 @@ namespace net.fushizen.attachable
 
         int FindNextPlayer()
         {
-            float bestDistance = range;
+            float limit = range + PLAYER_LEEWAY;
+            float bestDistance = limit;
             int bestIndex = -1;
 
             var pickupPos = pickup.transform.position;
@@ -1055,7 +1091,7 @@ namespace net.fushizen.attachable
                 {
                     if (preferSelf)
                     {
-                        if (distance < range)
+                        if (distance < limit)
                         {
                             bestIndex = i;
                             break;
