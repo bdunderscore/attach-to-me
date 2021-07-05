@@ -121,15 +121,6 @@ namespace net.fushizen.attachable {
             var updateLoop = gameObj.AddComponent<AttachableInternalUpdateLoop>();
             updateLoop.enabled = false;
 
-            var supportObj = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
-            Undo.RegisterCreatedObjectUndo(supportObj, "Attachable setup");
-
-            supportObj.transform.parent = gameObj.transform;
-            supportObj.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
-
-            supportObj.name = "Attachable Support Objects";
-
-
             UdonSharpEditor.UdonSharpEditorUtility.ConvertToUdonBehaviours(new UdonSharp.UdonSharpBehaviour[]
             {
                 attachable,
@@ -139,7 +130,6 @@ namespace net.fushizen.attachable {
             var config = gameObj.AddComponent<AttachableConfig>();
 
             config.t_pickup = t_target;
-            config.t_support = supportObj.transform;
             config.t_attachmentDirection = directionality.transform;
             config.SyncAll();
 

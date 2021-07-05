@@ -11,7 +11,6 @@ namespace net.fushizen.attachable
     class AttachableEditor : Editor
     {
         static bool lang_jp = false;
-        bool show_internal = false;
         bool show_general = true;
         bool show_selection = true;
         bool show_perms = true;
@@ -19,7 +18,6 @@ namespace net.fushizen.attachable
 
         SerializedProperty m_t_pickup;
         SerializedProperty m_t_attachmentDirection;
-        SerializedProperty m_t_support;
 
         SerializedProperty m_range;
         SerializedProperty m_directionality;
@@ -66,8 +64,6 @@ namespace net.fushizen.attachable
 
             public GUIContent header_internal;
 
-            public GUIContent m_t_support;
-
             public GUIContent warn_direction, warn_missing;
 
             public GUIContent m_trackOnUpdate;
@@ -96,7 +92,6 @@ namespace net.fushizen.attachable
                 m_perm_removeOwner = new GUIContent("最後に触った人"),
                 m_perm_removeOther = new GUIContent("その他の人"),
                 header_internal = new GUIContent("内部設定"),
-                m_t_support = new GUIContent("サポートプレハブ"),
                 warn_missing = new GUIContent("必須項目です。"),
                 header_animator = new GUIContent("Animator連動設定"),
                 m_c_animator = new GUIContent("連動させるAnimator"),
@@ -128,7 +123,6 @@ namespace net.fushizen.attachable
                 m_perm_removeOwner = new GUIContent("Last person to touch pickup can remove"),
                 m_perm_removeOther = new GUIContent("Anyone else can remove"),
                 header_internal = new GUIContent("Internal settings"),
-                m_t_support = new GUIContent("Support prefab"),
                 warn_missing = new GUIContent("This field is required"),
                 header_animator = new GUIContent("Animator control configuration"),
                 m_c_animator = new GUIContent("Animator to control"),
@@ -148,7 +142,6 @@ namespace net.fushizen.attachable
 
             m_t_pickup = serializedObject.FindProperty("t_pickup");
             m_t_attachmentDirection = serializedObject.FindProperty("t_attachmentDirection");
-            m_t_support = serializedObject.FindProperty("t_support");
 
             m_range = serializedObject.FindProperty("range");
             m_directionality = serializedObject.FindProperty("directionality");
@@ -281,25 +274,6 @@ namespace net.fushizen.attachable
                 EditorGUILayout.PropertyField(m_anim_onHeldLocal, lang.m_anim_onHeldLocal);
                 EditorGUILayout.PropertyField(m_anim_onTrack, lang.m_anim_onTrack);
                 EditorGUILayout.PropertyField(m_anim_onTrackLocal, lang.m_anim_onTrackLocal);
-            }
-
-            if (!isMultiple)
-            {
-                EditorGUILayout.Space();
-                show_internal = EditorGUILayout.Foldout(show_internal, lang.header_internal);
-                if (show_internal)
-                {
-                    EditorGUILayout.PropertyField(m_t_support, lang.m_t_support);
-                }
-                if (m_t_support.objectReferenceValue == null)
-                {
-                    if (!show_internal)
-                    {
-                        show_internal = true;
-                        EditorUtility.SetDirty(target);
-                    }
-                    EditorGUILayout.HelpBox(lang.warn_missing.text, MessageType.Error);
-                }
             }
 
             serializedObject.ApplyModifiedProperties();

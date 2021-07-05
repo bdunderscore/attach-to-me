@@ -10,6 +10,8 @@ namespace net.fushizen.attachable
     public class AttachablesGlobalTracking : UdonSharpBehaviour
     {
         readonly float PICKUP_TIMEOUT = 4.0f;
+        readonly float REMOVE_ALL_TIMEOUT = 1.0f;
+        readonly int REMOVE_ALL_COUNT = 3;
 
         Attachable[] attachables;
         Attachable[] trackingAttachables;
@@ -26,6 +28,10 @@ namespace net.fushizen.attachable
 
         int nextTrackingFrame;
 
+        bool altWasHeld;
+        float lastAltPress;
+        int altCounter;
+
         void Start()
         {
             attachables = new Attachable[16];
@@ -38,6 +44,11 @@ namespace net.fushizen.attachable
             var newArray = new Attachable[newSize];
             System.Array.Copy(attachables, newArray, oldArray.Length);
             return newArray;
+        }
+
+        public Attachable[] _a_GetAllRegistered()
+        {
+            return attachables;
         }
 
         public void _a_Register(Attachable a)
@@ -100,7 +111,8 @@ namespace net.fushizen.attachable
 
         private void Update()
         {
-            transform.position = Networking.LocalPlayer.GetTrackingData(VRCPlayerApi.TrackingDataType.Head).position;
+            var localPlayer = Networking.LocalPlayer;
+            transform.position = localPlayer.GetTrackingData(VRCPlayerApi.TrackingDataType.Head).position;
 
             for (int i = 0; i < nextUpdateTrackingSlot; i++)
             {
@@ -109,7 +121,32 @@ namespace net.fushizen.attachable
 
             float pos = Input.GetAxisRaw("Oculus_CrossPlatform_SecondaryThumbstickVertical");
 
-            bool enablePickup = pos < -0.7f || Input.GetKey(KeyCode.LeftAlt);
+            bool alt = false;
+            if (!localPlayer.IsUserInVR())
+            {
+                alt = Input.GetKey(KeyCode.LeftAlt);
+
+                if (alt && !altWasHeld)
+                {
+                    if (lastAltPress + REMOVE_ALL_TIMEOUT < Time.timeSinceLevelLoad)
+                    {
+                        lastAltPress = Time.timeSinceLevelLoad;
+                        altCounter = 0;
+                    }
+
+                    altCounter++;
+
+                    if (altCounter == REMOVE_ALL_COUNT)
+                    {
+                        for (int i = 0; i < nextFreeSlot; i++) {
+                            attachables[i]._a_TryRemoveFromSelf();
+                        }
+                    }
+                }
+                altWasHeld = alt;
+            }
+
+            bool enablePickup = pos < -0.7f || alt;
 
             if (enablePickup)
             {

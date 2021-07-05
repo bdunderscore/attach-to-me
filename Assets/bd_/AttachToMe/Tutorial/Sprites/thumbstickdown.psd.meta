@@ -15,11 +15,12 @@ TextureImporter:
     21300020: selectperson
     21300022: thumbstickdown_8
     21300024: thumbstickdown_9
+    21300026: deselect
   externalObjects: {}
   serializedVersion: 9
   mipmaps:
     mipMapMode: 0
-    enableMipMap: 0
+    enableMipMap: 1
     sRGBTexture: 1
     linearTexture: 0
     fadeOut: 0
@@ -171,10 +172,10 @@ TextureImporter:
       name: stickdown
       rect:
         serializedVersion: 2
-        x: 13
+        x: 152
         y: 0
-        width: 1011
-        height: 667
+        width: 872
+        height: 578
       alignment: 0
       pivot: {x: 0.5, y: 0.5}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -292,6 +293,26 @@ TextureImporter:
       tessellationDetail: 0
       bones: []
       spriteID: 8355894fc47604a459485986122c4f05
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: deselect
+      rect:
+        serializedVersion: 2
+        x: 496
+        y: 604
+        width: 164
+        height: 164
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 3487d90dce28dd84582336996696514c
       vertices: []
       indices: 
       edges: []
