@@ -21,6 +21,8 @@ using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEditor;
+using UnityEngine.SceneManagement;
+using VRC.Udon;
 
 #if UNITY_EDITOR
 using UdonSharpEditor;
@@ -94,21 +96,39 @@ namespace net.fushizen.attachable
         }
 
         readonly static string GLOBAL_TRACKING_PREFAB_GUID = "ad542b70c3bbcb14eaf2cf1120ea0422";
+        readonly static string GLOBAL_TRACKING_COMPONENT_SOURCE_GUID = "58dfc26d6eda8924d8230b16333fa16a";
+
+        internal static AttachablesGlobalTracking FindGlobalTrackingObject(Scene scene)
+        {
+            var sourcePath = AssetDatabase.GUIDToAssetPath(GLOBAL_TRACKING_COMPONENT_SOURCE_GUID);
+            var wantedSource = AssetDatabase.LoadAssetAtPath<AbstractUdonProgramSource>(sourcePath);
+
+            foreach (var root in scene.GetRootGameObjects())
+            {
+                foreach (var behaviour in root.GetComponentsInChildren<UdonBehaviour>())
+                {
+                    var source = behaviour.programSource;
+                    if (source == wantedSource)
+                    {
+                        return (AttachablesGlobalTracking)UdonSharpEditorUtility.GetProxyBehaviour(behaviour);
+                    }
+                }
+            }
+
+            return null;
+        }
 
         internal static void CheckGlobalTrackingReference(Attachable target)
         {
             if (target.globalTracking == null)
             {
                 // Find an existing globaltracking object, if any
-                foreach (var root in target.gameObject.scene.GetRootGameObjects())
-                {
-                    target.globalTracking = root.GetUdonSharpComponentInChildren<AttachablesGlobalTracking>();
-                    if (target.globalTracking != null)
-                    {
-                        UdonSharpEditorUtility.CopyProxyToUdon(target);
-                        EditorUtility.SetDirty(target);
-                        return;
-                    }
+                var existingTrackingObject = FindGlobalTrackingObject(target.gameObject.scene);
+                if (existingTrackingObject != null) {
+                    target.globalTracking = existingTrackingObject;
+                    UdonSharpEditorUtility.CopyProxyToUdon(target);
+                    EditorUtility.SetDirty(target);
+                    return;
                 }
 
                 // Create a global tracking object, since it doesn't exist
