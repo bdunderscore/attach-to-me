@@ -4,3 +4,9 @@ nav:
   - 日本語: jp.md
 theme:
   name: 'material'
+site_url: "https://bdunderscore.github.io/attach-to-me/"
+site_name: 'AttachToMe manual'
+site_description: 'AttachToMe manual'
+site_author: 'bd_'
+repo_name: 'bdunderscore/attach-to-me'
+repo_url: 'https://github.com/bdunderscore/attach-to-me'
