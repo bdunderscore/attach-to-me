@@ -101,7 +101,7 @@ namespace net.fushizen.attachable
                 m_anim_onHeld = new GUIContent("誰かが持っているフラグ"),
                 m_anim_onHeldLocal = new GUIContent("ローカルで持っているフラグ"),
 
-                m_trackOnUpdate = new GUIContent("DynamicBone互換性", "Dynamic Boneがぷるぷるするときはチェック入れましょう（少しラグが発生します）"),
+                m_trackOnUpdate = new GUIContent("処理タイミングをずらす", "Dynamic Bone等物理演算がぷるぷるするときはチェック入れましょう（少しラグが発生します）"),
             };
 
             en = new Strings()
@@ -132,7 +132,8 @@ namespace net.fushizen.attachable
                 m_anim_onHeld = new GUIContent("Held in hand"),
                 m_anim_onHeldLocal = new GUIContent("Held by local player"),
 
-                m_trackOnUpdate = new GUIContent("DynamicBone compatibility", "Check this if a dynamic bone object vibrates when moving (this will result in some additional lag)"),
+                m_trackOnUpdate = new GUIContent("Alternate timing", "Check this if a dynamic bone or other physics object vibrates when moving " +
+                    "(this will result in some additional lag, only check it if you need it!)"),
             };
         }
 

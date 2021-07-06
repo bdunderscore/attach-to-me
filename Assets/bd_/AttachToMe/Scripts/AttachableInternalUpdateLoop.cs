@@ -19,6 +19,10 @@ using UnityEngine;
 using VRC.SDKBase;
 using VRC.Udon;
 
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
+
 namespace net.fushizen.attachable
 {
     [UdonBehaviourSyncMode(BehaviourSyncMode.Manual)]
@@ -36,4 +40,17 @@ namespace net.fushizen.attachable
             a._a_Update();
         }
     }
+
+#if UNITY_EDITOR && !COMPILER_UDONSHARP
+
+    [CustomEditor(typeof(AttachableInternalUpdateLoop))]
+    class UpdateLoopEditor : Editor
+    {
+        public override void OnInspectorGUI()
+        {
+            EditorGUILayout.LabelField("Attachables internal component");
+        }
+    }
+
+#endif
 }
