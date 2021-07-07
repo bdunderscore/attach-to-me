@@ -11,7 +11,7 @@ GameObject:
   - component: {fileID: 89234100}
   - component: {fileID: 89234102}
   - component: {fileID: 89234101}
-  m_Layer: 5
+  m_Layer: 10
   m_Name: Image
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -83,7 +83,7 @@ GameObject:
   - component: {fileID: 161793221}
   - component: {fileID: 161793223}
   - component: {fileID: 161793222}
-  m_Layer: 5
+  m_Layer: 10
   m_Name: LMB
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -164,7 +164,7 @@ GameObject:
   - component: {fileID: 273796522}
   - component: {fileID: 273796524}
   - component: {fileID: 273796523}
-  m_Layer: 5
+  m_Layer: 10
   m_Name: Image
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -236,7 +236,7 @@ GameObject:
   - component: {fileID: 575036731}
   - component: {fileID: 575036733}
   - component: {fileID: 575036732}
-  m_Layer: 5
+  m_Layer: 10
   m_Name: BoneSel
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -349,7 +349,7 @@ GameObject:
   - component: {fileID: 831623770}
   - component: {fileID: 831623772}
   - component: {fileID: 831623771}
-  m_Layer: 5
+  m_Layer: 10
   m_Name: Image
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -422,7 +422,7 @@ GameObject:
   - component: {fileID: 1065223500}
   - component: {fileID: 1065223499}
   - component: {fileID: 1065223498}
-  m_Layer: 5
+  m_Layer: 10
   m_Name: Panel
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -519,7 +519,7 @@ GameObject:
   - component: {fileID: 1077834041}
   - component: {fileID: 1077834043}
   - component: {fileID: 1077834042}
-  m_Layer: 5
+  m_Layer: 10
   m_Name: MMB
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -600,7 +600,7 @@ GameObject:
   - component: {fileID: 1205430769}
   - component: {fileID: 1205430771}
   - component: {fileID: 1205430770}
-  m_Layer: 5
+  m_Layer: 10
   m_Name: Image
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -671,7 +671,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1262861087}
   - component: {fileID: 1262861088}
-  m_Layer: 5
+  m_Layer: 10
   m_Name: Padding
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -807,7 +807,7 @@ GameObject:
   - component: {fileID: 1453633428}
   - component: {fileID: 1453633430}
   - component: {fileID: 1453633429}
-  m_Layer: 5
+  m_Layer: 10
   m_Name: PlacementTutorial
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -880,7 +880,7 @@ GameObject:
   - component: {fileID: 1642569769}
   - component: {fileID: 1642569771}
   - component: {fileID: 1642569770}
-  m_Layer: 5
+  m_Layer: 10
   m_Name: PlayerSel
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -961,7 +961,7 @@ GameObject:
   - component: {fileID: 1912418649}
   - component: {fileID: 1912418651}
   - component: {fileID: 1912418650}
-  m_Layer: 5
+  m_Layer: 10
   m_Name: Text (TMP)
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1095,7 +1095,7 @@ GameObject:
   - component: {fileID: 2118007058}
   - component: {fileID: 2118007060}
   - component: {fileID: 2118007059}
-  m_Layer: 5
+  m_Layer: 10
   m_Name: PickupTutorial
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1305,7 +1305,7 @@ GameObject:
   - component: {fileID: 1296909256985340980}
   - component: {fileID: 1296909256985340981}
   - component: {fileID: 1296909256985340986}
-  m_Layer: 5
+  m_Layer: 10
   m_Name: Canvas
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1402,7 +1402,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1296909257944146039}
   - component: {fileID: 1296909257944146036}
-  m_Layer: 0
+  m_Layer: 10
   m_Name: DesktopTutorialPanel
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1452,7 +1452,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1296909258629924615}
-  m_Layer: 5
+  m_Layer: 10
   m_Name: Alignment
   m_TagString: Untagged
   m_Icon: {fileID: 0}

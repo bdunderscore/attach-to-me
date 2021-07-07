@@ -9,7 +9,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 7982660465204155751}
-  m_Layer: 0
+  m_Layer: 10
   m_Name: CylinderAnimationScale
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -42,7 +42,7 @@ GameObject:
   - component: {fileID: 7199656521576392810}
   - component: {fileID: 7199656521576392808}
   - component: {fileID: 7199656521576392809}
-  m_Layer: 0
+  m_Layer: 10
   m_Name: Panel
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -115,7 +115,7 @@ GameObject:
   - component: {fileID: 7199656521662741101}
   - component: {fileID: 7199656521662741090}
   - component: {fileID: 7199656521662741091}
-  m_Layer: 0
+  m_Layer: 10
   m_Name: Cylinder
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -192,7 +192,7 @@ GameObject:
   - component: {fileID: 7199656522094396655}
   - component: {fileID: 7199656522094396653}
   - component: {fileID: 7199656522094396654}
-  m_Layer: 0
+  m_Layer: 10
   m_Name: Image
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -265,7 +265,7 @@ GameObject:
   - component: {fileID: 7199656522363305628}
   - component: {fileID: 7199656522363305629}
   - component: {fileID: 7199656522363305630}
-  m_Layer: 0
+  m_Layer: 10
   m_Name: Canvas
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -363,7 +363,7 @@ GameObject:
   - component: {fileID: 7199656522724573939}
   - component: {fileID: 7199656522724573948}
   - component: {fileID: 2534646172448908872}
-  m_Layer: 0
+  m_Layer: 10
   m_Name: TM-Base
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -444,7 +444,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 7199656523129151050}
-  m_Layer: 0
+  m_Layer: 10
   m_Name: Stem
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -477,7 +477,7 @@ GameObject:
   - component: {fileID: 7199656523437629332}
   - component: {fileID: 7199656523437629321}
   - component: {fileID: 7199656523437629322}
-  m_Layer: 0
+  m_Layer: 10
   m_Name: Base
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -555,7 +555,7 @@ GameObject:
   - component: {fileID: 7199656523569675992}
   - component: {fileID: 7199656523569675993}
   - component: {fileID: 7199656523569675994}
-  m_Layer: 0
+  m_Layer: 10
   m_Name: Cube (1)
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -643,7 +643,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 7199656523575364496}
-  m_Layer: 0
+  m_Layer: 10
   m_Name: UIRoot
   m_TagString: Untagged
   m_Icon: {fileID: 0}
