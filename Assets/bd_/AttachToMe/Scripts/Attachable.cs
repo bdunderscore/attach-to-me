@@ -813,7 +813,7 @@ namespace net.fushizen.attachable
 
         public void _a_TryRemoveFromSelf()
         {
-            if (!isHeldLocally && sync_targetPlayer == Networking.LocalPlayer.playerId && HasPickupPermissions())
+            if (!isHeldLocally && sync_targetPlayer == Networking.LocalPlayer.playerId && _a_HasPickupPermissions())
             {
                 Networking.SetOwner(Networking.LocalPlayer, gameObject);
                 ClearTracking();
