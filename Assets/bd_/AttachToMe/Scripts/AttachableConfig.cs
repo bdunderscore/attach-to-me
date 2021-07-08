@@ -54,6 +54,43 @@ namespace net.fushizen.attachable
         public string anim_onTrack, anim_onHeld, anim_onTrackLocal, anim_onHeldLocal;
 
 #if UNITY_EDITOR
+        static Mesh directionMesh;
+
+        private void OnDrawGizmos()
+        {
+            if (t_attachmentDirection == null) return;
+
+            if (!(Selection.gameObjects.Contains(gameObject) || Selection.gameObjects.Contains(t_attachmentDirection.gameObject))) return;
+
+            if (directionMesh == null)
+            {
+                var path = AssetDatabase.GUIDToAssetPath("eaf389c752150ad41b2be30249ed222f");
+                if (path == null) return;
+
+                directionMesh = AssetDatabase.LoadAssetAtPath<Mesh>(path);
+                if (directionMesh == null) return;
+            }
+
+            var color = Color.magenta;
+            Gizmos.color = color;
+
+            /*Gizmos.DrawMesh(
+                directionMesh,
+                t_attachmentDirection.position,
+                t_attachmentDirection.rotation,
+                Vector3.one * range
+            );*/
+
+            var src = t_attachmentDirection.position;
+            var dst = t_attachmentDirection.position + range * t_attachmentDirection.TransformDirection(Vector3.forward);
+
+            Gizmos.DrawLine(src, dst);
+
+            color.a = 0.5f;
+            Gizmos.color = color;
+            Gizmos.DrawSphere(dst, range * 0.025f);
+        }
+
         private void OnValidate()
         {
             SyncAll();
