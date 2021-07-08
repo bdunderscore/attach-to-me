@@ -157,6 +157,8 @@ namespace net.fushizen.attachable
 
                 if (dist < distLimit)
                 {
+                    if (!obj._a_HasPickupPermissions()) continue;
+
                     if (obj._a_GetTrackingPlayer() == myPlayerId)
                     {
                         if (obj._a_HeldInLeftHand(trackingBone) && rhDist >= distLimit) continue;

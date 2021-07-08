@@ -830,11 +830,11 @@ namespace net.fushizen.attachable
                 pickup.pickupable = false;
             } else
             {
-                pickup.pickupable = HasPickupPermissions();
+                pickup.pickupable = _a_HasPickupPermissions();
             }
         }
 
-        bool HasPickupPermissions()
+        public bool _a_HasPickupPermissions()
         {
             if (targetPlayerId == -1 || VRCPlayerApi.GetPlayerCount() == 1)
             {
