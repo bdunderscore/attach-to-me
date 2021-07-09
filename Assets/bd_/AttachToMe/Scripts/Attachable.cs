@@ -1390,14 +1390,18 @@ namespace net.fushizen.attachable
                 }
             } else
             {
+                if (tracking || targetPlayerId >= 0) onHold._a_OnPlayerSelect();
+
+                tracking = false;
+                targetBoneId = -1;
+
                 // Change tracking player
                 if (targetPlayerId < 0) return;
 
                 onHold._a_OnPlayerSelect();
 
                 targetPlayerId = FindPlayer();
-                tracking = false;
-                targetBoneId = -1;
+
             }
         }
 
