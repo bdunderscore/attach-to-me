@@ -142,7 +142,7 @@ namespace net.fushizen.attachable
                     break;
                 }
 
-                if (obj.pickup.pickupable) continue;
+                if (obj.pickup == null || obj.pickup.pickupable || obj.t_attachmentDirection == null) continue;
 
                 int trackingBone = obj._a_GetTrackingBone();
 
