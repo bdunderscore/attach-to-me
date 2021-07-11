@@ -1,4 +1,4 @@
-# Attach-To-Me for VRChat overview
+# Attach-To-Me for VRChat manual
 
 [日本語版はこちら](jp.md)
 
@@ -30,6 +30,8 @@ Bones will be shown in different colors depending on the tracking state:
 * Green: The bone will be tracked when you drop the prop.
 * Red: The bone is too far away; if you drop the prop, tracking will be cancelled.
 
+[example images]
+
 ## Installation
 
 Install the following packages, in order:
@@ -40,15 +42,15 @@ Install the following packages, in order:
 
 ## Usage (world authors)
 
-1. To make a prop attachable, right click it in the Hierarchy, and select the `[AttachToMe] Make Attachable` option. This will automatically configure most options. Your original object will be moved to the `pickup` child of a new parent object (which keeps the name of the original object).
-2. Verify that the collider on the `pickup` child of the object has the collider bounds set properly. This will usually happen automatically if the object you started with had a `MeshRenderer` on it. Otherwise, adjust the range manually.
-3. Ensure the Z axis of the `Attachment Direction` object under the `pickup` points in the direction you expect the object to be attached to.
+1. To make a prop attachable, right click it in the Hierarchy, and select the `[AttachToMe] Make Attachable` option. This will automatically configure most options. Your original object will be moved to the `pickup` child of a new parent object (which keeps the name of the original object). [image: before and after]
+2. Verify that the collider on the `pickup` child of the object has the collider bounds set properly. This will usually happen automatically if the object you started with had a `MeshRenderer` on it. Otherwise, adjust the range manually. [image: collider bounds]
+3. Ensure the Z axis of the `Attachment Direction` object under the `pickup` points in the direction you expect the object to be attached to. When the root object or the direction object is selected, a large arrow will indicate this direction; the length of the arrow indicates the maximum range at which bones can be attached to.
 
-When you first create an attachable object, an "Attachables Controller" object will be automatically created. You can move this object somewhere else in your Hierarchy, but ensure that it remains active.
+When you first create an attachable object, an "Attachables Controller" object will be automatically created at the root of your scene. You can move this object somewhere else in your Hierarchy, but please ensure that it remains active. If you accidentally delete the controller, open the inspector on each of your attachables to recreate it.
 
 ### Configuration options
 
-* DynamicBone compatibility: Some dynamicbone setups will glitch when tracking a bone. If this happens, check this box; while this will add approximately one frame of tracking lag, it will avoid this problem.
+* Alternate timing: Some dynamic bone or other physics setups will behave erratically when tracking a bone. If this happens, check this box; while this will add approximately one frame of tracking lag, it will avoid this problem.
 * Bone selection radius: Sets the maximum distance from prop to bone for a bone to be considered a candidate for selection.
 * Prefer self: When checked, the player selection logic will select the player holding the prop _first_ (if they have any bones in range). If unchecked, the player holding the prop will be selected _last_.
 * Direction marker and directionality:  Sets a preferred direction for attachment. See below for details.
@@ -66,4 +68,13 @@ If you are making a prop which is perfectly symmetric and has no preferred direc
 
 Attachables can signal an animator to respond to the state of the attachment. Set the "Animator to control" parameter to the animator component to control. The flag parameter names refer to boolean animator variables which will be set in various states.
 
+### In-world tutorial
+
+By default, tutorial guidance will be shown the first time a user picks up a prop, or (if in VR) places their hand near a tracking prop after entering the world.
+
+[VR: hand tutorial][VR: pickup tutorial][desktop tutorial]
+
+ These popups help guide the user to the various interactions supported by the AttachToMe system; however, if this is undesired, these can be disabled by setting the Tutorial object under the "Attachables Controller" prefab to be inactive.
+ 
+ [inactive tutorial example]
 
