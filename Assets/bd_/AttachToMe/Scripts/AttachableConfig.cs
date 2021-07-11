@@ -74,13 +74,13 @@ namespace net.fushizen.attachable
             var color = Color.magenta;
             Gizmos.color = color;
 
-            /*Gizmos.DrawMesh(
+            Gizmos.DrawMesh(
                 directionMesh,
                 t_attachmentDirection.position,
                 t_attachmentDirection.rotation,
                 Vector3.one * range
-            );*/
-
+            );
+            /*
             var src = t_attachmentDirection.position;
             var dst = t_attachmentDirection.position + range * t_attachmentDirection.TransformDirection(Vector3.forward);
 
@@ -88,7 +88,7 @@ namespace net.fushizen.attachable
 
             color.a = 0.5f;
             Gizmos.color = color;
-            Gizmos.DrawSphere(dst, range * 0.025f);
+            Gizmos.DrawSphere(dst, range * 0.025f);*/
         }
 
         private void OnValidate()
