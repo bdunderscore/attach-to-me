@@ -44,9 +44,29 @@
 
 オブジェクトを追従可能にするためには、ヒエラルキーで右クリックして「[AttachToMe] Make Attachable」を選択してください。これで殆どの設定が自動的に行われます。新しいオブジェクトが制作され、選択したオブジェクトがその子としてpickupに改名されます。
 
+<figure>
+  <img src="../install guide - pre setup.png">
+  <figcaption>セットアップ前</figcaption>
+</figure><figure>
+  <img src="../install guide - post setup.png">
+  <figcaption>セットアップ後</figcaption>
+</figure>
+
 セットアップしたあとはpickupオブジェクトのコライダー範囲を確認してください。MeshRendererが元々ついていたオブジェクトなら自動的に設定されることが多いが、そうでない場合は調整してください。
 
+<figure>
+  <img src="../install guide - adjust collider.png">
+  <figcaption>コライダー範囲調整</figcaption>
+</figure>
+
 Attachment DirectionオブジェクトのZ軸を追尾想定方向に合わせてください。この方向は大き目な矢印で表示されます（矢印の長さは追尾可能範囲です）
+
+<figure>
+  <img src="../install guide - directionality.png">
+  <figcaption>矢印を想定される装着方向に合わせてください</figcaption>
+</figure>
+
+なお、Attachableコンポーネントの複数選択編集ができます。
 
 ### Attachables Controller
 
@@ -76,11 +96,18 @@ Attachment Directionオブジェクトがボーン選択に指向性を与えま
 
 ### ワールド内チュートリアル
 
-デフォルトでは、初めてワールドに入ってからアタッチオブジェクトを手に取ったり、あるいはVRなら追従オブジェクトに手をかざすととチュートリアルが表示されます。
+デフォルトでは、初めてワールドに入ってからアタッチオブジェクトを手に取ったり、あるいはVRなら追従オブジェクトに手をかざすととチュートリアルが表示されます。このチュートリアルはユーザーがボーン選択、プレイヤー選択、そしてピックアップ判定復活という操作を行えば出なくなります。
 
-[VR: hand tutorial][VR: pickup tutorial][desktop tutorial]
+[VR: hand tutorial][VR: pickup tutorial]
+
+<figure>
+  <img src="../tutorial desktop.png">
+  <figcaption>デスクトップチュートリアル</figcaption>
+</figure>
 
 この表示はユーザーにAttachToMeシステムの操作方を知らせるために実装していますが、不要でしたら「Attachables Controller」の中のTutorialオブジェクトを無効化することでなくせます。
 
- [inactive tutorial example]
-
+ <figure>
+  <img src="../tutorial off.png">
+  <figcaption>チュートリアルを無効化する</figcaption>
+</figure>

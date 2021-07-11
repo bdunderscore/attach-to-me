@@ -44,9 +44,31 @@ Install the following packages, in order:
 
 ### Per-prop setup
 
-1. To make a prop attachable, right click it in the Hierarchy, and select the `[AttachToMe] Make Attachable` option. This will automatically configure most options. Your original object will be moved to the `pickup` child of a new parent object (which keeps the name of the original object). [image: before and after]
-2. Verify that the collider on the `pickup` child of the object has the collider bounds set properly. This will usually happen automatically if the object you started with had a `MeshRenderer` on it. Otherwise, adjust the range manually. [image: collider bounds]
-3. Ensure the Z axis of the `Attachment Direction` object under the `pickup` points in the direction you expect the object to be attached to. When the root object or the direction object is selected, a large arrow will indicate this direction; the length of the arrow indicates the maximum range at which bones can be attached to.
+To make a prop attachable, right click it in the Hierarchy, and select the `[AttachToMe] Make Attachable` option. This will automatically configure most options. Your original object will be moved to the `pickup` child of a new parent object (which keeps the name of the original object).
+
+<figure>
+  <img src="install guide - pre setup.png">
+  <figcaption>Before setup</figcaption>
+</figure><figure>
+  <img src="install guide - post setup.png">
+  <figcaption>After setup</figcaption>
+</figure>
+
+Verify that the collider on the `pickup` child of the object has the collider bounds set properly. This will usually happen automatically if the object you started with had a `MeshRenderer` on it. Otherwise, adjust the range manually.
+
+<figure>
+  <img src="install guide - adjust collider.png">
+  <figcaption>Adjusting collider bounds</figcaption>
+</figure>
+
+Ensure the Z axis of the `Attachment Direction` object under the `pickup` points in the direction you expect the object to be attached to. When the root object or the direction object is selected, a large arrow will indicate this direction; the length of the arrow indicates the maximum range at which bones can be attached to.
+
+<figure>
+  <img src="install guide - directionality.png">
+  <figcaption>Ensure the arrow points where the object will attach to</figcaption>
+</figure>
+
+Note that Attachable components support editing with multiple objects selected.
 
 ### Attachables Controller
 
@@ -74,11 +96,19 @@ Attachables can signal an animator to respond to the state of the attachment. Se
 
 ### In-world tutorial
 
-By default, tutorial guidance will be shown the first time a user picks up a prop, or (if in VR) places their hand near a tracking prop after entering the world.
+By default, tutorial guidance will be shown the first time a user picks up a prop, or (if in VR) places their hand near a tracking prop after entering the world. They will go away once the user performs each of the three major interactions supported by the system (bone selection, player selection, and pickup).
 
-[VR: hand tutorial][VR: pickup tutorial][desktop tutorial]
+[VR: hand tutorial][VR: pickup tutorial]
+
+<figure>
+  <img src="tutorial desktop.png">
+  <figcaption>Desktop tutorial</figcaption>
+</figure>
 
  These popups help guide the user to the various interactions supported by the AttachToMe system; however, if this is undesired, these can be disabled by setting the Tutorial object under the "Attachables Controller" prefab to be inactive.
  
- [inactive tutorial example]
+ <figure>
+  <img src="tutorial off.png">
+  <figcaption>Disabling the tutorial system</figcaption>
+</figure>
 
