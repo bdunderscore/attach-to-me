@@ -32,7 +32,9 @@ Bones will be shown in different colors depending on the tracking state:
 
 [example images]
 
-## Installation
+## Usage (world authors)
+
+### Installation
 
 Install the following packages, in order:
 
@@ -40,11 +42,13 @@ Install the following packages, in order:
 * [UdonSharp](https://github.com/MerlinVR/UdonSharp/releases) (version 0.19.12 or higher)
 * VRC Attach-To-Me
 
-## Usage (world authors)
+### Per-prop setup
 
 1. To make a prop attachable, right click it in the Hierarchy, and select the `[AttachToMe] Make Attachable` option. This will automatically configure most options. Your original object will be moved to the `pickup` child of a new parent object (which keeps the name of the original object). [image: before and after]
 2. Verify that the collider on the `pickup` child of the object has the collider bounds set properly. This will usually happen automatically if the object you started with had a `MeshRenderer` on it. Otherwise, adjust the range manually. [image: collider bounds]
 3. Ensure the Z axis of the `Attachment Direction` object under the `pickup` points in the direction you expect the object to be attached to. When the root object or the direction object is selected, a large arrow will indicate this direction; the length of the arrow indicates the maximum range at which bones can be attached to.
+
+### Attachables Controller
 
 When you first create an attachable object, an "Attachables Controller" object will be automatically created at the root of your scene. You can move this object somewhere else in your Hierarchy, but please ensure that it remains active. If you accidentally delete the controller, open the inspector on each of your attachables to recreate it.
 
