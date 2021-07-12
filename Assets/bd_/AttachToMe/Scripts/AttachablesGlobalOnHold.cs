@@ -66,6 +66,15 @@ namespace net.fushizen.attachable
 
         void SelectTutorial()
         {
+            if (!vrTutorial.transform.parent.gameObject.activeInHierarchy)
+            {
+                // Tutorial is disabled, kill the attempted pickup scan
+                tut_boneSelect = true;
+                tut_playerSelect = true;
+                tut_pickup = true;
+                return;
+            }
+
             if (Networking.LocalPlayer.IsUserInVR())
             {
                 vrTutorial.gameObject.SetActive(true);
