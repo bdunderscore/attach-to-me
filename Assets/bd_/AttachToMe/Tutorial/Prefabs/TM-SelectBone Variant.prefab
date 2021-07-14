@@ -13,6 +13,26 @@ PrefabInstance:
       value: 
       objectReference: {fileID: 21300012, guid: 6cfd9dab87ce55f4fb3bf3ecc888e7c6,
         type: 3}
+    - target: {fileID: 7199656522363305631, guid: b92f704e86255e1449c9fc851f688f39,
+        type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7199656522363305631, guid: b92f704e86255e1449c9fc851f688f39,
+        type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 7199656522363305631, guid: b92f704e86255e1449c9fc851f688f39,
+        type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7199656522363305631, guid: b92f704e86255e1449c9fc851f688f39,
+        type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 7199656522724573939, guid: b92f704e86255e1449c9fc851f688f39,
         type: 3}
       propertyPath: m_LocalPosition.x
@@ -71,7 +91,7 @@ PrefabInstance:
     - target: {fileID: 7199656522724573949, guid: b92f704e86255e1449c9fc851f688f39,
         type: 3}
       propertyPath: m_Name
-      value: TM-SelectBone
+      value: TM-SelectBone Variant
       objectReference: {fileID: 0}
     m_RemovedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: b92f704e86255e1449c9fc851f688f39, type: 3}

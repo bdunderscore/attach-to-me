@@ -53,6 +53,8 @@ namespace net.fushizen.attachable
 
         void Start()
         {
+            if (attachables != null) return;
+
             attachables = new Attachable[16];
             trackingAttachables = new Attachable[16];
         }
@@ -71,8 +73,12 @@ namespace net.fushizen.attachable
 
         public void _a_Register(Attachable a)
         {
-            if (nextFreeSlot >= attachables.Length)
+            if (attachables == null || nextFreeSlot >= attachables.Length)
             {
+                if (attachables == null) {
+                    Start();
+                }
+
                 attachables = ResizeArray(attachables, (int)(attachables.Length * 1.5));
                 trackingAttachables = ResizeArray(trackingAttachables, attachables.Length);
             }

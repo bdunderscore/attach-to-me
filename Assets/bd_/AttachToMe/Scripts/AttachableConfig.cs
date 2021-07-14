@@ -110,6 +110,11 @@ namespace net.fushizen.attachable
                     var udonBehaviour = UdonSharpEditorUtility.GetBackingUdonBehaviour(component);
                     udonBehaviour.enabled = false;
 
+                    if (PrefabUtility.IsPartOfPrefabInstance(gameObject))
+                    {
+                        return; // can't reorder
+                    }
+
                     // Sort this next to the AttachableUpdate component
                     int updateIndex = -1;
                     int postLateUpdateIndex = -1;
