@@ -30,7 +30,6 @@ namespace net.fushizen.attachable
 
         Attachable[] attachables;
         Attachable[] trackingAttachables;
-        Attachable[] updateTrackingAttachables;
 
         bool cur_enabled;
 
@@ -39,7 +38,7 @@ namespace net.fushizen.attachable
 
         int nextEvalSlot;
 
-        int nextTrackingSlot, nextUpdateTrackingSlot;
+        int nextTrackingSlot;
 
         int nextTrackingFrame;
 
@@ -56,7 +55,6 @@ namespace net.fushizen.attachable
         {
             attachables = new Attachable[16];
             trackingAttachables = new Attachable[16];
-            updateTrackingAttachables = new Attachable[16];
         }
 
         Attachable[] ResizeArray(Attachable[] oldArray, int newSize)
@@ -77,7 +75,6 @@ namespace net.fushizen.attachable
             {
                 attachables = ResizeArray(attachables, (int)(attachables.Length * 1.5));
                 trackingAttachables = ResizeArray(trackingAttachables, attachables.Length);
-                updateTrackingAttachables = ResizeArray(updateTrackingAttachables, attachables.Length);
             }
 
             attachables[nextFreeSlot++] = a;
@@ -87,16 +84,8 @@ namespace net.fushizen.attachable
         {
             if (a._tracking_index >= 0) return;
 
-            if (a.trackOnUpdate)
-            {
-                a._tracking_index = nextUpdateTrackingSlot;
-                updateTrackingAttachables[nextUpdateTrackingSlot++] = a;
-            } else
-            {
-                a._tracking_index = nextTrackingSlot;
-                trackingAttachables[nextTrackingSlot++] = a;
-            }
-            
+            a._tracking_index = nextTrackingSlot;
+            trackingAttachables[nextTrackingSlot++] = a;
         }
 
         public void _a_DisableTracking(Attachable a)
@@ -105,28 +94,14 @@ namespace net.fushizen.attachable
             if (idx < 0) return;
             a._tracking_index = -1;
 
-            if (a.trackOnUpdate)
+            nextTrackingSlot--;
+            if (idx != nextTrackingSlot)
             {
-                nextUpdateTrackingSlot--;
-                if (idx != nextUpdateTrackingSlot)
-                {
-                    var other = updateTrackingAttachables[nextUpdateTrackingSlot];
-                    updateTrackingAttachables[idx] = other;
-                    other._tracking_index = idx;
-                }
-                updateTrackingAttachables[nextUpdateTrackingSlot] = null;
+                var other = trackingAttachables[nextTrackingSlot];
+                trackingAttachables[idx] = other;
+                other._tracking_index = idx;
             }
-            else
-            {
-                nextTrackingSlot--;
-                if (idx != nextTrackingSlot)
-                {
-                    var other = trackingAttachables[nextTrackingSlot];
-                    trackingAttachables[idx] = other;
-                    other._tracking_index = idx;
-                }
-                trackingAttachables[nextTrackingSlot] = null;
-            }
+            trackingAttachables[nextTrackingSlot] = null;
         }
 
         public void _a_RespawnBoneReader()
@@ -160,15 +135,8 @@ namespace net.fushizen.attachable
         {
             _a_RespawnBoneReader();
 
-            var localPlayer = Networking.LocalPlayer;
-            transform.position = localPlayer.GetTrackingData(VRCPlayerApi.TrackingDataType.Head).position;
-
-            for (int i = 0; i < nextUpdateTrackingSlot; i++)
-            {
-                updateTrackingAttachables[i]._a_UpdateTracking();
-            }
-
             float pos = Input.GetAxisRaw("Oculus_CrossPlatform_SecondaryThumbstickVertical");
+            var localPlayer = Networking.LocalPlayer;
 
             bool alt = false;
             if (!localPlayer.IsUserInVR())
@@ -218,22 +186,6 @@ namespace net.fushizen.attachable
                 {
                     attachables[nextEvalSlot]._a_SetPickupEnabled(cur_enabled);
                 }
-            }
-        }
-
-        private void LateUpdate()
-        {
-            nextTrackingFrame = Time.frameCount;
-        }
-
-        private void OnWillRenderObject()
-        {
-            if (Time.frameCount != nextTrackingFrame) return;
-            nextTrackingFrame = 0;
-
-            for (int i = 0; i < nextTrackingSlot; i++)
-            {
-                trackingAttachables[i]._a_UpdateTracking();
             }
         }
     }

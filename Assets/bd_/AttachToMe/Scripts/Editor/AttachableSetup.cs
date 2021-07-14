@@ -121,10 +121,14 @@ namespace net.fushizen.attachable {
             var updateLoop = gameObj.AddComponent<AttachableInternalUpdateLoop>();
             updateLoop.enabled = false;
 
+            var postLateUpdate = gameObj.AddComponent<AttachableInternalPostLateUpdate>();
+            postLateUpdate.enabled = false;
+
             UdonSharpEditor.UdonSharpEditorUtility.ConvertToUdonBehaviours(new UdonSharp.UdonSharpBehaviour[]
             {
                 attachable,
-                updateLoop
+                updateLoop,
+                postLateUpdate
             });
 
             var config = gameObj.AddComponent<AttachableConfig>();

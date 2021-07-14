@@ -123,6 +123,11 @@ namespace net.fushizen.attachable
         /// Disablable update loop component
         AttachableInternalUpdateLoop updateLoop;
 
+        /// <summary>
+        ///  Disablable post-late-update loop component
+        /// </summary>
+        AttachableInternalPostLateUpdate postLateUpdateLoop;
+
         #endregion
 
         #region State transition animation data
@@ -242,6 +247,7 @@ namespace net.fushizen.attachable
             mat_bone = obj_boneModelBody.transform.GetComponent<MeshRenderer>().sharedMaterial;
 
             updateLoop = GetComponent<AttachableInternalUpdateLoop>();
+            postLateUpdateLoop = GetComponent<AttachableInternalPostLateUpdate>();
         }
 
         void Start()
@@ -257,6 +263,7 @@ namespace net.fushizen.attachable
             ClearTracking();
 
             updateLoop.enabled = false;
+            postLateUpdateLoop.enabled = false;
         }
 
 
@@ -274,6 +281,24 @@ namespace net.fushizen.attachable
             return sync_targetPlayer;
         }
 
+        bool wasTracking;
+        void SetTrackingEnabled(bool tracking)
+        {
+            if (wasTracking == tracking) return;
+            wasTracking = tracking;
+
+            if (tracking)
+            {
+                globalTracking._a_EnableTracking(this);
+            } else
+            {
+                globalTracking._a_DisableTracking(this);
+            }
+
+            updateLoop.enabled = isHeldLocally || (tracking && trackOnUpdate);
+            postLateUpdateLoop.enabled = tracking && !trackOnUpdate;
+        }
+
         /// <summary>
         /// Disables tracking in synced data (but does not actually request serialization)
         /// </summary>
@@ -283,8 +308,7 @@ namespace net.fushizen.attachable
 
             sync_targetPlayer = sync_targetBone = -1;
 
-            updateLoop.enabled = false;
-            globalTracking._a_DisableTracking(this);
+            SetTrackingEnabled(false);
             _a_SetPickupPerms();
             _a_SyncAnimator();
 
@@ -315,8 +339,7 @@ namespace net.fushizen.attachable
 
             sync_seqno++;
 
-            updateLoop.enabled = true;
-            globalTracking._a_EnableTracking(this);
+            SetTrackingEnabled(true);
             _a_SetPickupPerms();
             _a_SyncAnimator();
 
@@ -384,16 +407,9 @@ namespace net.fushizen.attachable
 
             var isTracking = (sync_targetPlayer >= 0);
 
-            updateLoop.enabled = isHeldLocally;
             if (isTracking != (_tracking_index != -1))
             {
-                if (isTracking)
-                {
-                    globalTracking._a_EnableTracking(this);
-                } else
-                {
-                    globalTracking._a_DisableTracking(this);
-                }
+                SetTrackingEnabled(isTracking);
             }
 
             if (!isTracking || isHeldLocally)
@@ -714,8 +730,8 @@ namespace net.fushizen.attachable
 
             RequestSerialization();
 
-            updateLoop.enabled = true;
-            globalTracking._a_DisableTracking(this);
+            SetTrackingEnabled(false);
+            updateLoop.enabled = true; // SetTrackingEnabled won't set this if we weren't already tracking
 
             if (targetPlayerId >= 0 && TargetPlayerValid())
             {            
@@ -795,9 +811,10 @@ namespace net.fushizen.attachable
             if (isSelectionActive)
             {
                 UpdateHeld();
-            } else
+            }
+            else
             {
-                updateLoop.enabled = false;
+                _a_UpdateTracking();
             }
         }
 

@@ -48,7 +48,7 @@ namespace net.fushizen.attachable
     {
         public override void OnInspectorGUI()
         {
-            EditorGUILayout.LabelField("Attachables internal component");
+            EditorGUILayout.LabelField("Attachables internal component (Update)");
         }
     }
 

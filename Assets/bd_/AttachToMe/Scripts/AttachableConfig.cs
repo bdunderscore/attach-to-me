@@ -31,6 +31,7 @@ using UdonSharpEditor;
 namespace net.fushizen.attachable
 {
     [RequireComponent(typeof(Attachable))]
+    [ExecuteInEditMode]
     public class AttachableConfig : MonoBehaviour
     {
         [HideInInspector]
@@ -52,6 +53,11 @@ namespace net.fushizen.attachable
 
         public Animator c_animator;
         public string anim_onTrack, anim_onHeld, anim_onTrackLocal, anim_onHeldLocal;
+
+        /// <summary>
+        /// Some validation steps can't be done in OnValidate - this flag lets us move them to the editor Update event instead.
+        /// </summary>
+        private bool needValidateOnUpdate = false;
 
 #if UNITY_EDITOR
         static Mesh directionMesh;
@@ -91,9 +97,61 @@ namespace net.fushizen.attachable
             Gizmos.DrawSphere(dst, range * 0.025f);*/
         }
 
+        private void Update()
+        {
+            if (needValidateOnUpdate)
+            {
+                Attachable attachable = gameObject.GetUdonSharpComponent<Attachable>();
+
+                // Upgrade assistance - add missing PostLateUpdate components
+                if (attachable.GetUdonSharpComponent<AttachableInternalPostLateUpdate>() == null)
+                {
+                    var component = gameObject.AddUdonSharpComponent<AttachableInternalPostLateUpdate>();
+                    var udonBehaviour = UdonSharpEditorUtility.GetBackingUdonBehaviour(component);
+                    udonBehaviour.enabled = false;
+
+                    // Sort this next to the AttachableUpdate component
+                    int updateIndex = -1;
+                    int postLateUpdateIndex = -1;
+
+                    var updateLoop = gameObject.GetUdonSharpComponent<AttachableInternalUpdateLoop>();
+                    var updateLoopUdon = UdonSharpEditorUtility.GetBackingUdonBehaviour(updateLoop);
+
+                    var components = gameObject.GetComponents(typeof(Component)).ToList();
+                    int visibleCount = 0;
+                    for (int i = 0; i < components.Count; i++)
+                    {
+                        if (components[i].hideFlags == HideFlags.HideInInspector) continue;
+
+                        if (components[i] == updateLoopUdon)
+                        {
+                            updateIndex = visibleCount;
+                        } else if (components[i] == udonBehaviour)
+                        {
+                            postLateUpdateIndex = visibleCount;
+                        }
+                        visibleCount++;
+                    }
+
+                    if (updateIndex == -1 || postLateUpdateIndex == -1) return;
+
+                    int toMove = postLateUpdateIndex - updateIndex - 1;
+
+                    for (int i = 0; i < toMove; i++)
+                    {
+                        UnityEditorInternal.ComponentUtility.MoveComponentUp(udonBehaviour);
+                    }
+                }
+            }
+
+            needValidateOnUpdate = false;
+        }
+
         private void OnValidate()
         {
             SyncAll();
+
+            needValidateOnUpdate = true;
         }
 
         public void SyncAll() {
