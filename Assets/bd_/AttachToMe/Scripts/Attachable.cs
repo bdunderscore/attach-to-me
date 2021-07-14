@@ -1315,11 +1315,19 @@ namespace net.fushizen.attachable
                 BoneScan(player);
                 int priorId = targetBoneId;
                 targetBoneId = prefBoneLength > 0 ? prefBoneIds[0] : -1;
+
                 if (priorId != targetBoneId)
                 {
                     // Stop tracking, since we're forcing a bone change
                     tracking = false;
                     RequestSerialization();
+                }
+
+                if (prefBoneLength == 0)
+                {
+                    // There were no candidate bones on this player, try the next.
+
+                    targetPlayerId = FindPlayer();
                 }
             }
 
