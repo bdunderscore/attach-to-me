@@ -733,20 +733,31 @@ namespace net.fushizen.attachable
             SetTrackingEnabled(false);
             updateLoop.enabled = true; // SetTrackingEnabled won't set this if we weren't already tracking
 
+            tracking = false;
             if (targetPlayerId >= 0 && TargetPlayerValid())
-            {            
+            {
                 if (forcePickupEnabledUntil < Time.timeSinceLevelLoad && targetPlayerId >= 0)
                 {
                     // Player picked up a pickup locked to another player by pressing alt, clear the tutorial hook
                     onHold._a_OnAttachedPickup();
                 }
 
-                var player = VRCPlayerApi.GetPlayerById(targetPlayerId);
-                BoneScan(player);
+                if (targetBoneId >= 0)
+                {
+                    tracking = true;
+                }
+
+                if (!tracking || forcePickupEnabledUntil <= Time.timeSinceLevelLoad)
+                {
+                    // Enable tracking, but restart the bone selection cycle.
+                    var player = VRCPlayerApi.GetPlayerById(targetPlayerId);
+                    BoneScan(player);
+                }
             }
 
             // Suppress the desktop trigger-press-on-pickup
             trigger_wasHeld[0] = trigger_wasHeld[1] = true;
+            trigger_sameHand_lastChange = Time.timeSinceLevelLoad;
 
             _a_SyncAnimator();
         }
@@ -800,6 +811,9 @@ namespace net.fushizen.attachable
                 RequestSerialization();
             }
             _a_SyncAnimator();
+
+            // Clear cached bone-distance data, this will force a rescan the next time we pick it up.
+            closestBoneDistance = 0;
         }
 
         #endregion
@@ -1306,18 +1320,25 @@ namespace net.fushizen.attachable
             if (!LoadBoneData(player)) return;
 
             // If locked, check if current bone is a valid target.
-            bool needScan = !tracking
-                || !DistanceToBone(player, targetBoneId)
-                || boneDistance > closestBoneDistance * secondaryCandidateMult;
+            var boneValid = tracking;
+            var dtb = DistanceToBone(player, targetBoneId);
+            boneValid = boneValid && dtb;
+
+            bool needScan = !boneValid || boneDistance > closestBoneDistance * secondaryCandidateMult;
 
             if (needScan)
             {
+                var oldDistance = boneDistance;
+
                 BoneScan(player);
                 int priorId = targetBoneId;
-                targetBoneId = prefBoneLength > 0 ? prefBoneIds[0] : -1;
+                var bestBone = prefBoneLength > 0 ? prefBoneIds[0] : -1;
 
-                if (priorId != targetBoneId)
+                // closestBoneDistance might have been outdated, check whether we still want to switch bones now
+                if (!boneValid || oldDistance > closestBoneDistance * secondaryCandidateMult || bestBone == -1)
                 {
+                    targetBoneId = bestBone;
+
                     // Stop tracking, since we're forcing a bone change
                     tracking = false;
                     RequestSerialization();
@@ -1326,7 +1347,6 @@ namespace net.fushizen.attachable
                 if (prefBoneLength == 0)
                 {
                     // There were no candidate bones on this player, try the next.
-
                     targetPlayerId = FindPlayer();
                 }
             }
