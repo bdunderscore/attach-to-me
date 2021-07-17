@@ -9,7 +9,7 @@ namespace net.fushizen.attachable
 
     public class AttachableVersion : UdonSharpBehaviour
     {
-        readonly string VERSION = "AttachToMe v0.9.8alpha";
+        readonly string VERSION = "AttachToMe v0.9.11alpha";
 
         void Start()
         {
