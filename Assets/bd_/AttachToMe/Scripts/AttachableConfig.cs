@@ -80,6 +80,11 @@ namespace net.fushizen.attachable
             CheckReference(transform, ref updateLoop, typeof(AttachableInternalUpdateLoop));
             CheckReference(transform, ref postLateUpdateLoop, typeof(AttachableInternalPostLateUpdate));
             CheckReference(t_pickup, ref pickupProxy, typeof(AttachableInternalPickupProxy));
+
+            attachable.enabled = true;
+            updateLoop.enabled = false;
+            postLateUpdateLoop.enabled = false;
+            pickupProxy.enabled = true;
         }
 
         private void CheckReference(Transform refObject, ref UdonBehaviour udon, Type udonSharpClass)
