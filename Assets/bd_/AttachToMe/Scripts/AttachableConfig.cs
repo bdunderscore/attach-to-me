@@ -70,6 +70,8 @@ namespace net.fushizen.attachable
         [SerializeField]
         UdonBehaviour attachable, updateLoop, postLateUpdateLoop, pickupProxy;
 
+#if UNITY_EDITOR
+
         private void FindReferences()
         {
             CheckReference(transform, ref attachable, typeof(Attachable));
@@ -135,7 +137,6 @@ namespace net.fushizen.attachable
             };
         }
 
-#if UNITY_EDITOR
         static Mesh directionMesh;
 
         private void OnDrawGizmos()
