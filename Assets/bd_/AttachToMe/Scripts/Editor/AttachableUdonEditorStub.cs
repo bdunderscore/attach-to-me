@@ -15,15 +15,14 @@ namespace net.fushizen.attachable
         public override void OnInspectorGUI()
         {
             Attachable target = (Attachable)this.target;
-            /* testing stuff
+            /* testing stuff */
             if (UdonSharpGUI.DrawConvertToUdonBehaviourButton(target) ||
                 UdonSharpGUI.DrawProgramSource(target))
                 return;
 
-            // DrawDefaultInspector(); // - for testing
+            DrawDefaultInspector(); // - for testing
             
-            EditorGUILayout.LabelField("Please use the AttachableConfig component to configure this component.");
-            */
+            // */
 
             EditorGUILayout.LabelField("Please use the AttachableConfig component to configure this component.");
 

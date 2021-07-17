@@ -201,7 +201,9 @@ namespace net.fushizen.attachable
 
             if (show_general)
             {
-                EditorGUILayout.PropertyField(m_trackOnUpdate, lang.m_trackOnUpdate);
+                // trackOnUpdate seems unnecessary with OnPostLateUpdate update loops.
+                // Leaving it in (available in the debug inspector) just in case for now.
+                //EditorGUILayout.PropertyField(m_trackOnUpdate, lang.m_trackOnUpdate);
 
                 EditorGUILayout.Space();
             }
@@ -225,22 +227,23 @@ namespace net.fushizen.attachable
                         EditorUtility.SetDirty(target);
                     }
                     EditorGUILayout.HelpBox(lang.warn_missing.text, MessageType.Error);
-                }
-
-                var trace = t_direction.parent;
-                while (trace != null && trace != t_pickup)
+                } else
                 {
-                    trace = trace.parent;
-                }
-
-                if (trace == null)
-                {
-                    if (!show_selection)
+                    var trace = t_direction.parent;
+                    while (trace != null && trace != t_pickup)
                     {
-                        show_selection = true;
-                        EditorUtility.SetDirty(target);
+                        trace = trace.parent;
                     }
-                    EditorGUILayout.HelpBox(lang.warn_direction.text, MessageType.Warning);
+
+                    if (trace == null)
+                    {
+                        if (!show_selection)
+                        {
+                            show_selection = true;
+                            EditorUtility.SetDirty(target);
+                        }
+                        EditorGUILayout.HelpBox(lang.warn_direction.text, MessageType.Warning);
+                    }
                 }
             }
 

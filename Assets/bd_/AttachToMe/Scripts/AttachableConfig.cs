@@ -23,6 +23,8 @@ using UnityEngine;
 using UnityEditor;
 using UnityEngine.SceneManagement;
 using VRC.Udon;
+using VRC.Udon.Common;
+using VRC.Udon.Common.Interfaces;
 
 #if UNITY_EDITOR
 using UdonSharpEditor;
@@ -30,7 +32,10 @@ using UdonSharpEditor;
 
 namespace net.fushizen.attachable
 {
-    [RequireComponent(typeof(Attachable))]
+    /// <summary>
+    /// This component acts as the authoritative source for configuration for attachables. By taking this configuration into our hands, we can
+    /// support multi-object editing, ensure that prefabs don't break in future upgrades, and fix missing component references.
+    /// </summary>
     [ExecuteInEditMode]
     public class AttachableConfig : MonoBehaviour
     {
@@ -58,6 +63,77 @@ namespace net.fushizen.attachable
         /// Some validation steps can't be done in OnValidate - this flag lets us move them to the editor Update event instead.
         /// </summary>
         private bool needValidateOnUpdate = false;
+
+        public bool debugComponentsVisibleInInspector = false;
+
+        // Bound components
+        [SerializeField]
+        UdonBehaviour attachable, updateLoop, postLateUpdateLoop, pickupProxy;
+
+        private void FindReferences()
+        {
+            CheckReference(transform, ref attachable, typeof(Attachable));
+            CheckReference(transform, ref updateLoop, typeof(AttachableInternalUpdateLoop));
+            CheckReference(transform, ref postLateUpdateLoop, typeof(AttachableInternalPostLateUpdate));
+            CheckReference(t_pickup, ref pickupProxy, typeof(AttachableInternalPickupProxy));
+        }
+
+        private void CheckReference(Transform refObject, ref UdonBehaviour udon, Type udonSharpClass)
+        {
+            var asset = UdonSharpEditorUtility.GetUdonSharpProgramAsset(udonSharpClass);
+
+            if (udon != null && (udon.programSource == null || udon.gameObject != refObject.gameObject))
+            {
+                // destroy and recreate
+                DestroyImmediate(udon);
+                udon = null;
+            }
+
+            if (refObject == null) return;
+
+            if (udon == null)
+            {
+                // Try to find a matching UdonBehaviour if the link was broken
+                foreach (var candidate in refObject.gameObject.GetComponents<UdonBehaviour>())
+                {
+                    if (candidate.programSource == asset)
+                    {
+                        udon = candidate;
+                        break;
+                    }
+                }
+
+                if (udon == null)
+                {
+                    udon = refObject.gameObject.AddComponent<UdonBehaviour>();
+                }
+            }
+            
+            udon.programSource = asset;
+            udon.hideFlags = debugComponentsVisibleInInspector ? HideFlags.None : HideFlags.HideInInspector;
+        }
+
+        // When the config component is destroyed, destroy the child objects.
+        private void OnDestroy()
+        {
+            TryDestroy(attachable);
+            TryDestroy(updateLoop);
+            TryDestroy(postLateUpdateLoop);
+            TryDestroy(pickupProxy);
+        }
+
+        void TryDestroy(UdonBehaviour udon)
+        {
+            // Don't destroy synchronously as we might be destroying the gameObject; it would break iteration to destroy sibling components.
+            EditorApplication.delayCall += () =>
+            {
+                if (udon != null)
+                {
+                    if (Application.isPlaying) Destroy(udon);
+                    else DestroyImmediate(udon);
+                }
+            };
+        }
 
 #if UNITY_EDITOR
         static Mesh directionMesh;
@@ -101,61 +177,16 @@ namespace net.fushizen.attachable
         {
             if (needValidateOnUpdate)
             {
-                Attachable attachable = gameObject.GetUdonSharpComponent<Attachable>();
-
-                // Upgrade assistance - add missing PostLateUpdate components
-                if (attachable.GetUdonSharpComponent<AttachableInternalPostLateUpdate>() == null)
-                {
-                    var component = gameObject.AddUdonSharpComponent<AttachableInternalPostLateUpdate>();
-                    var udonBehaviour = UdonSharpEditorUtility.GetBackingUdonBehaviour(component);
-                    udonBehaviour.enabled = false;
-
-                    if (PrefabUtility.IsPartOfPrefabInstance(gameObject))
-                    {
-                        return; // can't reorder
-                    }
-
-                    // Sort this next to the AttachableUpdate component
-                    int updateIndex = -1;
-                    int postLateUpdateIndex = -1;
-
-                    var updateLoop = gameObject.GetUdonSharpComponent<AttachableInternalUpdateLoop>();
-                    var updateLoopUdon = UdonSharpEditorUtility.GetBackingUdonBehaviour(updateLoop);
-
-                    var components = gameObject.GetComponents(typeof(Component)).ToList();
-                    int visibleCount = 0;
-                    for (int i = 0; i < components.Count; i++)
-                    {
-                        if (components[i].hideFlags == HideFlags.HideInInspector) continue;
-
-                        if (components[i] == updateLoopUdon)
-                        {
-                            updateIndex = visibleCount;
-                        } else if (components[i] == udonBehaviour)
-                        {
-                            postLateUpdateIndex = visibleCount;
-                        }
-                        visibleCount++;
-                    }
-
-                    if (updateIndex == -1 || postLateUpdateIndex == -1) return;
-
-                    int toMove = postLateUpdateIndex - updateIndex - 1;
-
-                    for (int i = 0; i < toMove; i++)
-                    {
-                        UnityEditorInternal.ComponentUtility.MoveComponentUp(udonBehaviour);
-                    }
-                }
+                FindReferences();
             }
 
             needValidateOnUpdate = false;
+
+            SyncAll();
         }
 
         private void OnValidate()
         {
-            SyncAll();
-
             needValidateOnUpdate = true;
         }
 
@@ -164,44 +195,38 @@ namespace net.fushizen.attachable
 
             bool anythingChanged = false;
 
-            syncProp(ref anythingChanged, ref t_pickup, ref attachable.t_pickup);
-            syncProp(ref anythingChanged, ref t_attachmentDirection, ref attachable.t_attachmentDirection);
-            syncProp(ref anythingChanged, ref range, ref attachable.range);
-            syncProp(ref anythingChanged, ref directionality, ref attachable.directionality);
-            syncProp(ref anythingChanged, ref preferSelf, ref attachable.preferSelf);
-            syncProp(ref anythingChanged, ref trackOnUpdate, ref attachable.trackOnUpdate);
-            syncProp(ref anythingChanged, ref disableFingerTracking, ref attachable.disableFingerSelection);
-            syncProp(ref anythingChanged, ref perm_removeTracee, ref attachable.perm_removeTracee);
-            syncProp(ref anythingChanged, ref perm_removeOwner, ref attachable.perm_removeOwner);
-            syncProp(ref anythingChanged, ref perm_removeOther, ref attachable.perm_removeOther);
+            this.attachable = UdonSharpEditorUtility.GetBackingUdonBehaviour(attachable);
 
-            syncProp(ref anythingChanged, ref c_animator, ref attachable.c_animator);
-            syncProp(ref anythingChanged, ref anim_onHeld, ref attachable.anim_onHeld);
-            syncProp(ref anythingChanged, ref anim_onHeldLocal, ref attachable.anim_onHeldLocal);
-            syncProp(ref anythingChanged, ref anim_onTrack, ref attachable.anim_onTrack);
-            syncProp(ref anythingChanged, ref anim_onTrackLocal, ref attachable.anim_onTrackLocal);
+            syncProp(ref anythingChanged, nameof(t_pickup));
+            syncProp(ref anythingChanged, nameof(t_attachmentDirection));
+            syncProp(ref anythingChanged, nameof(range));
+            syncProp(ref anythingChanged, nameof(directionality));
+            syncProp(ref anythingChanged, nameof(preferSelf));
+            syncProp(ref anythingChanged, nameof(trackOnUpdate));
+            syncProp(ref anythingChanged, nameof(disableFingerTracking));
+            syncProp(ref anythingChanged, nameof(perm_removeOther));
+            syncProp(ref anythingChanged, nameof(perm_removeOwner));
+            syncProp(ref anythingChanged, nameof(perm_removeTracee));
+
+            syncProp(ref anythingChanged, nameof(c_animator));
+            syncProp(ref anythingChanged, nameof(anim_onHeld));
+            syncProp(ref anythingChanged, nameof(anim_onHeldLocal));
+            syncProp(ref anythingChanged, nameof(anim_onTrack));
+            syncProp(ref anythingChanged, nameof(anim_onTrackLocal));
 
             if (!PrefabUtility.IsPartOfPrefabInstance(this) && !EditorApplication.isPlayingOrWillChangePlaymode)
             {
                 CheckGlobalTrackingReference(attachable);
             }
 
-            if (anythingChanged)
-            {
-                Undo.RecordObjects(new UnityEngine.Object[] { attachable, UdonSharpEditorUtility.GetBackingUdonBehaviour(attachable) }, "Sync attachable configuration");
-                UdonSharpEditorUtility.CopyProxyToUdon(attachable); 
-            }
-
             isNewlyCreated = false;
         }
 
         readonly static string GLOBAL_TRACKING_PREFAB_GUID = "ad542b70c3bbcb14eaf2cf1120ea0422";
-        readonly static string GLOBAL_TRACKING_COMPONENT_SOURCE_GUID = "58dfc26d6eda8924d8230b16333fa16a";
 
         internal static AttachablesGlobalTracking FindGlobalTrackingObject(Scene scene)
         {
-            var sourcePath = AssetDatabase.GUIDToAssetPath(GLOBAL_TRACKING_COMPONENT_SOURCE_GUID);
-            var wantedSource = AssetDatabase.LoadAssetAtPath<AbstractUdonProgramSource>(sourcePath);
+            var wantedSource = UdonSharpEditorUtility.GetUdonSharpProgramAsset(typeof(AttachablesGlobalTracking));
 
             foreach (var root in scene.GetRootGameObjects())
             {
@@ -247,68 +272,51 @@ namespace net.fushizen.attachable
             }
         }
 
-        private void syncProp(ref bool anythingChanged, ref string newVal, ref string oldVal)
+        private void syncProp(ref bool anythingChanged, string name)
         {
+            var ty = typeof(AttachableConfig);
+            var prop = ty.GetField(name);
+
+            var propType = prop.FieldType;
+
+            object udonVal;
+            bool found = attachable.publicVariables.TryGetVariableValue(name, out udonVal);
+
             if (isNewlyCreated)
             {
-                newVal = oldVal;
-            }
-            else if ((newVal == null || oldVal == null) || (newVal != null && !newVal.Equals(oldVal)))
+                if (found)
+                {
+                    prop.SetValue(this, udonVal);
+                }
+            } else
             {
-                oldVal = newVal;
-                anythingChanged = true;
-            }
-        }
+                var curVal = prop.GetValue(this);
 
-        private void syncProp(ref bool anythingChanged, ref bool newVal, ref bool oldVal)
-        {
-            if (isNewlyCreated)
-            {
-                newVal = oldVal;
-            } else if (newVal != oldVal)
-            {
-                oldVal = newVal;
-                anythingChanged = true;
-            }
-        }
+                if (!found) {
+                    // new UdonVariable is generic, so we need to reflect to invoke it
+                    var varType = typeof(UdonVariable<>).MakeGenericType(new Type[] { propType });
 
-        private void syncProp(ref bool anythingChanged, ref float newVal, ref float oldVal)
-        {
-            if (isNewlyCreated)
-            {
-                newVal = oldVal;
-            }
-            else if (newVal != oldVal)
-            {
-                oldVal = newVal;
-                anythingChanged = true;
-            }
-        }
+                    var ok =attachable.publicVariables.TryAddVariable(
+                        (IUdonVariable) varType.GetConstructor(new Type[] { typeof(string), propType })
+                            .Invoke(new object[] { name, curVal })
+                    );
 
-        private void syncProp(ref bool anythingChanged, ref Transform newVal, ref Transform oldVal)
-        {
-            if (isNewlyCreated)
-            {
-                newVal = oldVal;
-            }
-            else if (newVal != oldVal)
-            {
-                oldVal = newVal;
-                anythingChanged = true;
-            }
-        }
-
-
-        private void syncProp(ref bool anythingChanged, ref Animator newVal, ref Animator oldVal)
-        {
-            if (isNewlyCreated)
-            {
-                newVal = oldVal;
-            }
-            else if (newVal != oldVal)
-            {
-                oldVal = newVal;
-                anythingChanged = true;
+                    if (ok)
+                    {
+                        anythingChanged = true;
+                    } else {
+                        Debug.LogWarning("Failed to create variable " + name);
+                    }
+                } else {
+                    if ((udonVal == null) != (curVal == null) || (curVal != null && !curVal.Equals(udonVal))) {
+                        if (attachable.publicVariables.TrySetVariableValue(name, curVal))
+                        {
+                            anythingChanged = true;
+                        } else {
+                            Debug.LogWarning("Failed to set variable " + name);
+                        }
+                    }
+                }
             }
         }
 
