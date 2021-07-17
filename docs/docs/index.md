@@ -76,11 +76,11 @@ When you first create an attachable object, an "Attachables Controller" object w
 
 ### Configuration options
 
-* Alternate timing: Some dynamic bone or other physics setups will behave erratically when tracking a bone. If this happens, check this box; while this will add approximately one frame of tracking lag, it will avoid this problem.
 * Bone selection radius: Sets the maximum distance from prop to bone for a bone to be considered a candidate for selection.
 * Prefer self: When checked, the player selection logic will select the player holding the prop _first_ (if they have any bones in range). If unchecked, the player holding the prop will be selected _last_.
 * Direction marker and directionality:  Sets a preferred direction for attachment. See below for details.
 * Disable finger bone tracking: When checked, the prop will not be attachable to fingers. Recommended for larger props, where placing them on fingers is unlikely and the finger selection might get in the way.
+* Respawn time: When set, the prop will return to its starting location after the specified number of seconds has passed without being held or tracking a bone. Enter `0` to disable this feature. The respawning is performed using local coordinates, so if the parent objects are moving this will result in the respawn point moving as well.
 * Removal permissions: Selects which players can grab a prop that is attached to a player already. Useful for avoiding stealing props.
 * Animator control: See below
 
