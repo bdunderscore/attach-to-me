@@ -19,6 +19,7 @@ using UnityEngine;
 using VRC.SDKBase;
 using VRC.Udon;
 using VRC.Udon.Common;
+using VRC.SDK3.Components;
 
 #if UNITY_EDITOR
 using UdonSharpEditor;
@@ -86,6 +87,9 @@ namespace net.fushizen.attachable
         public Animator c_animator;
         public string anim_onTrack, anim_onHeld, anim_onTrackLocal, anim_onHeldLocal;
 
+        public float respawnTime;
+        int respawnTimeMs;
+
         #endregion
 
         #region Global tracking object hooks
@@ -105,6 +109,11 @@ namespace net.fushizen.attachable
         /// Actual VRC_Pickup object
         [HideInInspector] // exposed for tutorial hooks
         public VRC_Pickup pickup;
+
+        /// <summary>
+        /// Object Sync component on the pickup
+        /// </summary>
+        private VRCObjectSync objectSync;
 
         /// Transform for the beam shown from the pickup to the bone
         private Transform t_traceMarker;
@@ -161,6 +170,13 @@ namespace net.fushizen.attachable
         // Held remotely
         [UdonSynced]
         bool sync_heldRemote;
+
+        /// <summary>
+        /// Time that a respawn is scheduled at (expressed as network time ms). Zero if no respawn is scheduled.
+        /// Invalid when tracking (sync_targetBone >= 0) or held (sync_heldRemote).
+        /// </summary>
+        [UdonSynced]
+        int sync_scheduledRespawn;
 
         // Last applied state sequence number (triggers lerping transition)
         int last_seqno;
@@ -235,6 +251,7 @@ namespace net.fushizen.attachable
             proxy = t_pickup.GetComponent<AttachableInternalPickupProxy>();
             proxy._a_SetController(this);
             pickup = (VRC_Pickup) t_pickup.GetComponent(typeof(VRC_Pickup));
+            objectSync = (VRCObjectSync) t_pickup.GetComponent(typeof(VRCObjectSync));
 
             onHold = globalTracking.GetComponent<AttachablesGlobalOnHold>();
 
@@ -252,13 +269,15 @@ namespace net.fushizen.attachable
 
         void Start()
         {
+            SetupReferences();
+
             globalTracking._a_Register(this);
 
             trigger_wasHeld = new bool[2];
 
             InitBoneData();
             InitAnimator();
-            SetupReferences();
+            InitRespawn();
 
             ClearTracking();
 
@@ -266,6 +285,104 @@ namespace net.fushizen.attachable
             postLateUpdateLoop.enabled = false;
         }
 
+
+        #endregion
+
+        #region Respawn logic
+
+        Vector3 initialPosition;
+        Quaternion initialRotation;
+
+        /// <summary>
+        /// Records the initial position of the pickup. Called in Start.
+        /// </summary>
+        void InitRespawn()
+        {
+            initialPosition = t_pickup.localPosition;
+            initialRotation = t_pickup.localRotation;
+            respawnTimeMs = Mathf.CeilToInt(respawnTime * 1000.0f);
+        }
+
+        /// <summary>
+        /// Performs a respawn, if appropriate.
+        /// </summary>
+        void PerformRespawn()
+        {
+            Networking.SetOwner(Networking.LocalPlayer, t_pickup.gameObject);
+            t_pickup.localPosition = initialPosition;
+            t_pickup.localRotation = initialRotation;
+            objectSync.FlagDiscontinuity();
+
+            ClearRespawnTimer();
+            RequestSerialization();
+        }
+
+        /// <summary>
+        /// Resets the respawn timer to start ticking from the present moment.
+        /// </summary>
+        void SetRespawnTimer()
+        {
+            if (Networking.IsOwner(gameObject) && respawnTimeMs > 0)
+            {
+                sync_scheduledRespawn = Networking.GetServerTimeInMilliseconds() + respawnTimeMs;
+                ScheduleRespawnCheck();
+            }
+        }
+
+        /// <summary>
+        /// Clears the respawn timer, when we start tracking or are picked up.
+        /// Does not request serialization.
+        /// </summary>
+        void ClearRespawnTimer()
+        {
+            sync_scheduledRespawn = 0;
+        }
+
+        /// <summary>
+        /// True if we've scheduled a respawn check event already.
+        /// </summary>
+        bool checkRespawnScheduled;
+
+        public void _a_CheckRespawn()
+        {
+            checkRespawnScheduled = false;
+
+            if (sync_scheduledRespawn == 0) return;
+            if (!Networking.IsOwner(gameObject)) return;
+
+            if (sync_targetBone >= 0 || sync_heldRemote)
+            {
+                // Already tracking, clear the timer. This should have been cleared already, but just to make sure...
+                sync_scheduledRespawn = 0;
+                RequestSerialization();
+            } else if (sync_scheduledRespawn - Networking.GetServerTimeInMilliseconds() <= 0)
+            {
+                PerformRespawn();
+            } else
+            {
+                ScheduleRespawnCheck();
+            }
+        }
+
+        void ScheduleRespawnCheck()
+        {
+            if (Networking.IsOwner(gameObject) && !checkRespawnScheduled && sync_scheduledRespawn != 0)
+            {
+                int timeRemaining = sync_scheduledRespawn - Networking.GetServerTimeInMilliseconds();
+
+                if (timeRemaining < 0)
+                {
+                    PerformRespawn();
+                    return;
+                }
+
+                // Avoid spamming checks in the event of rounding issues by setting a minimum 100ms interval.
+                float delay = Mathf.Max(0.1f, timeRemaining / 1000.0f);
+
+                SendCustomEventDelayedSeconds(nameof(_a_CheckRespawn), delay);
+                checkRespawnScheduled = true;
+            }
+        }
 
         #endregion
 
@@ -297,6 +414,18 @@ namespace net.fushizen.attachable
 
             updateLoop.enabled = isHeldLocally || (tracking && trackOnUpdate);
             postLateUpdateLoop.enabled = tracking && !trackOnUpdate;
+
+            if (Networking.IsOwner(gameObject))
+            {
+                if (tracking || isHeldLocally)
+                {
+                    ClearRespawnTimer();
+                }
+                else
+                {
+                    SetRespawnTimer();
+                }
+            }
         }
 
         /// <summary>
@@ -760,6 +889,7 @@ namespace net.fushizen.attachable
             trigger_sameHand_lastChange = Time.timeSinceLevelLoad;
 
             _a_SyncAnimator();
+            ClearRespawnTimer();
         }
 
         public void _a_OnDrop()
@@ -799,6 +929,11 @@ namespace net.fushizen.attachable
 
             // The change in the currently-held-player flag seems to be delayed one frame
             SendCustomEventDelayedFrames(nameof(_a_SyncAnimator), 1);
+
+            if (!tracking)
+            {
+                SetRespawnTimer();
+            }
         }
 
         public override void OnOwnershipTransferred(VRCPlayerApi newOwner)

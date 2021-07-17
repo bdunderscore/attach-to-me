@@ -59,6 +59,8 @@ namespace net.fushizen.attachable
         public Animator c_animator;
         public string anim_onTrack, anim_onHeld, anim_onTrackLocal, anim_onHeldLocal;
 
+        public float respawnTime;
+
         /// <summary>
         /// Some validation steps can't be done in OnValidate - this flag lets us move them to the editor Update event instead.
         /// </summary>
@@ -214,6 +216,10 @@ namespace net.fushizen.attachable
             syncProp(ref anythingChanged, nameof(anim_onHeldLocal));
             syncProp(ref anythingChanged, nameof(anim_onTrack));
             syncProp(ref anythingChanged, nameof(anim_onTrackLocal));
+
+            respawnTime = Mathf.Max(0, Mathf.Min(3600, respawnTime));
+
+            syncProp(ref anythingChanged, nameof(respawnTime));
 
             if (!PrefabUtility.IsPartOfPrefabInstance(this) && !EditorApplication.isPlayingOrWillChangePlaymode)
             {
