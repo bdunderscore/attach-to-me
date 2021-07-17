@@ -176,21 +176,23 @@ namespace net.fushizen.attachable
             Gizmos.DrawSphere(dst, range * 0.025f);*/
         }
 
-        private void Update()
-        {
-            if (needValidateOnUpdate)
-            {
-                FindReferences();
-            }
-
-            needValidateOnUpdate = false;
-
-            SyncAll();
-        }
-
         private void OnValidate()
         {
-            needValidateOnUpdate = true;
+            if (EditorApplication.isPlayingOrWillChangePlaymode) return;
+
+            EditorApplication.delayCall += () =>
+            {
+                // Certain operations can't be done from OnValidate, so defer them to the next editor frame.
+                if (this != null) this.DeferredValidate();
+            };
+        }
+
+        void DeferredValidate()
+        {
+            if (EditorApplication.isPlayingOrWillChangePlaymode) return;
+
+            FindReferences();
+            SyncAll();
         }
 
         public void SyncAll() {
