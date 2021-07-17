@@ -66,7 +66,27 @@ namespace net.fushizen.attachable
         /// </summary>
         private bool needValidateOnUpdate = false;
 
-        public bool debugComponentsVisibleInInspector = false;
+        private static bool debugComponentsVisibleInInspector = false;
+
+        [MenuItem("Window/bd_/Attach-To-Me/Toggle Debug Mode")]
+        static void ToggleDebug()
+        {
+            if (EditorApplication.isPlayingOrWillChangePlaymode) return;
+
+            debugComponentsVisibleInInspector = !debugComponentsVisibleInInspector;
+
+            var scene = SceneManager.GetActiveScene();
+            if (scene.IsValid())
+            {
+                foreach (var root in scene.GetRootGameObjects())
+                {
+                    foreach (var config in root.GetComponentsInChildren<AttachableConfig>(true))
+                    {
+                        config.OnValidate();
+                    }
+                }
+            }
+        }
 
         // Bound components
         [SerializeField]
