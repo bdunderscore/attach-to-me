@@ -68,6 +68,11 @@ namespace net.fushizen.attachable
 
         private static bool debugComponentsVisibleInInspector = false;
 
+        // Bound components
+        [SerializeField]
+        UdonBehaviour attachable, updateLoop, postLateUpdateLoop, pickupProxy;
+
+#if UNITY_EDITOR
         [MenuItem("Window/bd_/Attach-To-Me/Toggle Debug Mode")]
         static void ToggleDebug()
         {
@@ -87,12 +92,6 @@ namespace net.fushizen.attachable
                 }
             }
         }
-
-        // Bound components
-        [SerializeField]
-        UdonBehaviour attachable, updateLoop, postLateUpdateLoop, pickupProxy;
-
-#if UNITY_EDITOR
 
         private void FindReferences()
         {
