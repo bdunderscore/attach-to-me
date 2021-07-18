@@ -70,7 +70,7 @@ namespace net.fushizen.attachable
 
         // Bound components
         [SerializeField]
-        UdonBehaviour attachable, updateLoop, postLateUpdateLoop, pickupProxy;
+        internal UdonBehaviour attachable, updateLoop, postLateUpdateLoop, pickupProxy;
 
 #if UNITY_EDITOR
         [MenuItem("Window/bd_/Attach-To-Me/Toggle Debug Mode")]
