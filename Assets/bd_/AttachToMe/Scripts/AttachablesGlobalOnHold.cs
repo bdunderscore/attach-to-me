@@ -18,6 +18,7 @@ using UdonSharp;
 using UnityEngine;
 using VRC.SDKBase;
 using VRC.Udon;
+using VRC.Udon.Common;
 
 namespace net.fushizen.attachable
 {
@@ -216,6 +217,8 @@ namespace net.fushizen.attachable
             tut_pickup = true;
         }
 
+        float lastPickup;
+
         public bool _a_OnPickup(Attachable a, VRC_Pickup.PickupHand hand)
         {
             if (activeHeld != null && activeHeld != a) return false;
@@ -237,6 +240,8 @@ namespace net.fushizen.attachable
                 pin_selectPlayer.trackingHand = VRC_Pickup.PickupHand.Left;
             }
 
+            lastPickup = Time.timeSinceLevelLoad;
+
             return true;
         }
 
@@ -251,6 +256,21 @@ namespace net.fushizen.attachable
                 pin_selectBone._a_SetShouldDisplay(false);
                 pin_selectPlayer._a_SetShouldDisplay(false);
             }
+        }
+
+        bool[] wasHeld = new bool[2];
+        public override void InputUse(bool value, UdonInputEventArgs args)
+        {
+            int index = args.handType == HandType.LEFT ? 0 : 1;
+
+            if (lastPickup + 0.25f > Time.timeSinceLevelLoad) return;
+
+            if (activeHeld != null && wasHeld[index] != value)
+            {
+                activeHeld._a_InputUse(args.handType, value);
+            }
+
+            wasHeld[index] = value;
         }
     }
 }

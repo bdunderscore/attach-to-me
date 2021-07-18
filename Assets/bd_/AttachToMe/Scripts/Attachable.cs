@@ -1585,23 +1585,26 @@ namespace net.fushizen.attachable
             }
         }
 
+        public void _a_InputUse(HandType handType, bool value)
+        {
+            if (!Networking.LocalPlayer.IsUserInVR()) return;
+            bool heldInLeft = pickup.currentHand == VRC_Pickup.PickupHand.Left;
+            bool sameHand = heldInLeft == (handType == HandType.LEFT);
+
+            int index = sameHand ? 0 : 1;
+            _a_OnTriggerChanged(sameHand, !value);
+
+            trigger_wasHeld[index] = value;
+            if (sameHand) trigger_sameHand_lastChange = Time.timeSinceLevelLoad;
+        }
+
         void CheckInput()
         {
             bool boneSelectTrigger, userSelectTrigger;
 
             if (Networking.LocalPlayer.IsUserInVR())
             {
-                bool heldInLeft = pickup.currentHand == VRC_Pickup.PickupHand.Left;
-
-                boneSelectTrigger = Input.GetAxis("Oculus_CrossPlatform_PrimaryIndexTrigger") > 0.9;
-                userSelectTrigger = Input.GetAxis("Oculus_CrossPlatform_SecondaryIndexTrigger") > 0.9;
-
-                if (!heldInLeft)
-                {
-                    bool tmp = boneSelectTrigger;
-                    boneSelectTrigger = userSelectTrigger;
-                    userSelectTrigger = tmp;
-                }
+                return;
             } else
             {
                 boneSelectTrigger = Input.GetMouseButton(0);

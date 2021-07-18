@@ -18,6 +18,7 @@ using UdonSharp;
 using UnityEngine;
 using VRC.SDKBase;
 using VRC.Udon;
+using VRC.Udon.Common;
 
 namespace net.fushizen.attachable
 {
@@ -137,6 +138,21 @@ namespace net.fushizen.attachable
             }
         }
 
+
+        public override void InputLookVertical(float value, UdonInputEventArgs args)
+        {
+            if (args.handType != HandType.RIGHT || value > -0.7f)
+            {
+                return;
+            }
+            if (!Networking.LocalPlayer.IsUserInVR()) return;
+
+            pickupsEnabledUntil = Time.timeSinceLevelLoad + PICKUP_TIMEOUT;
+            if (!cur_enabled) nextEvalSlot = 0;
+
+            cur_enabled = true;
+        }
+
         private void Update()
         {
             _a_RespawnBoneReader();
@@ -171,13 +187,7 @@ namespace net.fushizen.attachable
 
             bool enablePickup = pos < -0.7f || alt;
 
-            if (enablePickup)
-            {
-                pickupsEnabledUntil = Time.timeSinceLevelLoad + PICKUP_TIMEOUT;
-                if (!cur_enabled) nextEvalSlot = 0;
-
-                cur_enabled = true;
-            } else if (cur_enabled && pickupsEnabledUntil < Time.timeSinceLevelLoad)
+            if (cur_enabled && pickupsEnabledUntil < Time.timeSinceLevelLoad)
             {
                 nextEvalSlot = 0;
                 cur_enabled = false;
