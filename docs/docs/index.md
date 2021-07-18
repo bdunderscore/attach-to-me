@@ -98,7 +98,10 @@ Attachables can signal an animator to respond to the state of the attachment. Se
 
 By default, tutorial guidance will be shown the first time a user picks up a prop, or (if in VR) places their hand near a tracking prop after entering the world. They will go away once the user performs each of the three major interactions supported by the system (bone selection, player selection, and pickup).
 
-[VR: hand tutorial][VR: pickup tutorial]
+<figure>
+  <img src="tutorial vr.png">
+  <figcaption>VR tutorial</figcaption>
+</figure>
 
 <figure>
   <img src="tutorial desktop.png">

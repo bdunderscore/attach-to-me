@@ -98,7 +98,10 @@ Attachment Directionオブジェクトがボーン選択に指向性を与えま
 
 デフォルトでは、初めてワールドに入ってからアタッチオブジェクトを手に取ったり、あるいはVRなら追従オブジェクトに手をかざすととチュートリアルが表示されます。このチュートリアルはユーザーがボーン選択、プレイヤー選択、そしてピックアップ判定復活という操作を行えば出なくなります。
 
-[VR: hand tutorial][VR: pickup tutorial]
+<figure>
+  <img src="tutorial vr.png">
+  <figcaption>VRチュートリアル</figcaption>
+</figure>
 
 <figure>
   <img src="../tutorial desktop.png">
