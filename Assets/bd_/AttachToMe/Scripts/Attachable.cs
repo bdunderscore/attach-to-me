@@ -29,44 +29,10 @@ using UnityEditor;
 
 namespace net.fushizen.attachable
 {
-    // UI controls
-    // Trigger (same hand): Attach (short press), detach (long press), next target (press after attachment)
-    // Trigger (other hand): Change target player
-
-    // Player targets are selected based on abs(distance along Z) to capsule center
-
-    // Targets:
-    //   For most bones, we imagine a line between the bone's origin and its primary child:
-    //     UpperLeg -> LowerLeg
-    //     LowerLeg -> Foot
-    //     Foot -> Toe
-    //     Spine -> Chest -> Neck -> Head
-    //     Shoulder -> UpperArm -> LowerArm -> Hand
-    //     Finger Proximal -> Intermediate -> Distal
-    //
-    //     Distance to bone is distance of closest approach between Z+ direction on model and the bone line.
-    //
-    //   For terminal bones we treat them as spheres of radius determined by nearby bones:
-    //     Toe, Eye, Jaw, UpperChest: Not mapped
-    //     Head: Distance to neck
-    //     Last finger: Distance to prior bone
-    //     Hips: Greater of distance to upper leg and distance to spine.
-    //
-    //     Distance to bone is distance of closest approach between Z+ direction on model and bone sphere
-
-    // We will initially select the closest bone by the above heuristic. We then keep this choice until we find a bone
-    // that is X times better. Manual overriding can also select any bone not more than X times worse than the best.
-
     [UdonBehaviourSyncMode(BehaviourSyncMode.Manual)]
     [DefaultExecutionOrder(0)]
     public class Attachable : UdonSharpBehaviour
     {
-        /// <summary>
-        /// Additional range (in addition to the bone range) for searching for players; beyond this distance
-        /// (to capsule root) we'll skip the expensive bone analysis.
-        /// </summary>
-        private float PLAYER_LEEWAY = 2.0f;
-
         #region Inspector fields
 
         public Transform t_pickup;
@@ -106,6 +72,7 @@ namespace net.fushizen.attachable
 
         /// PickupProxy object on the pickup
         AttachableInternalPickupProxy proxy;
+
         /// Actual VRC_Pickup object
         [HideInInspector] // exposed for tutorial hooks
         public VRC_Pickup pickup;
@@ -116,15 +83,6 @@ namespace net.fushizen.attachable
         /// Object Sync component on the pickup
         /// </summary>
         private VRCObjectSync objectSync;
-
-        /// Transform for the beam shown from the pickup to the bone
-        private Transform t_traceMarker;
-
-        /// Root transform for the bone display mode
-        private Transform t_boneModelRoot;
-
-        /// The gameobject holding the renderer for the prism representing the body of the bone
-        private GameObject obj_boneModelBody;
 
         /// <summary>
         /// Material used to render the bone wireframes
@@ -214,38 +172,7 @@ namespace net.fushizen.attachable
         /// </summary>
         bool isHeldLocally;
 
-        /// <summary>
-        /// True if bone/player selection can be performed for this object.
-        /// </summary>
-        bool isSelectionActive;
-
-        /// <summary>
-        /// True if we intend to transition to tracking mode on drop (ie we're locked on)
-        /// </summary>
-        bool tracking;
-
-        /// <summary>
-        /// Local target player
-        /// </summary>
-        int targetPlayerId;
-        /// <summary>
-        /// Local target bone
-        /// </summary>
-        int targetBoneId;
-
-        bool[] trigger_wasHeld;
-        float trigger_sameHand_lastChange;
-
-        /// <summary>
-        /// Time (since scene load) of the last full scan we performed, when in target-locked mode.
-        /// Used to determine if bone selection will do a new full search or not
-        /// 
-        /// TODO: unused
-        /// </summary>
-        float lastBoneScan;
-
         #endregion
-
 
         #region Initialization
 
@@ -261,11 +188,6 @@ namespace net.fushizen.attachable
 
             var t_support = globalTracking.transform;
             globalTrackingScale = t_support.localScale.x;
-            t_traceMarker = t_support.Find("TraceMarker");
-            t_boneModelRoot = t_support.Find("BoneMarkerRoot");
-            obj_boneModelBody = t_boneModelRoot.Find("boneMarker/Bone").gameObject;
-
-            mat_bone = obj_boneModelBody.transform.GetComponent<MeshRenderer>().sharedMaterial;
 
             updateLoop = GetComponent<AttachableInternalUpdateLoop>();
             postLateUpdateLoop = GetComponent<AttachableInternalPostLateUpdate>();
@@ -276,8 +198,6 @@ namespace net.fushizen.attachable
             SetupReferences();
 
             globalTracking._a_Register(this);
-
-            trigger_wasHeld = new bool[2];
 
             InitBoneData();
             InitAnimator();
@@ -644,7 +564,6 @@ namespace net.fushizen.attachable
                     ClearTracking();
                     RequestSerialization();
                 }
-                Debug.Log($"Failed to track stp={sync_targetPlayer} bone={sync_targetBone}");
                 return;
             }
 
@@ -729,11 +648,11 @@ namespace net.fushizen.attachable
 
             sync_heldRemote = true;
             isHeldLocally = true;
-            isSelectionActive = onHold._a_OnPickup(this, pickup.currentHand);
+            onHold._a_OnPickup(this, pickup.currentHand);
 
             if (sync_targetPlayer >= 0)
             {
-                if (forcePickupEnabledUntil < Time.timeSinceLevelLoad && targetPlayerId >= 0)
+                if (forcePickupEnabledUntil < Time.timeSinceLevelLoad && sync_targetPlayer >= 0)
                 {
                     // Player picked up a pickup locked to another player by pressing alt, clear the tutorial hook
                     onHold._a_OnAttachedPickup();
@@ -754,15 +673,12 @@ namespace net.fushizen.attachable
             onHold._a_OnDrop(this);
 
             isHeldLocally = false;
-            isSelectionActive = false;
 
             var wasSelectionActive = boneSelection._a_EndSelection(this);
 
             if (Networking.IsOwner(gameObject))
             {
                 sync_heldRemote = false;
-
-                Debug.Log($"wasSelectionActive={wasSelectionActive} trackingPlayer={boneSelection._a_trackingPlayer} trackingBone={boneSelection._a_trackingBone}");
 
                 if (wasSelectionActive && boneSelection._a_trackingBone >= 0)
                 {
@@ -844,18 +760,16 @@ namespace net.fushizen.attachable
 
             if (sync_heldRemote || (sync_targetPlayer >= 0 && !allowAttachPickup && Time.timeSinceLevelLoad >= forcePickupEnabledUntil))
             {
-                Debug.Log($"SPP: force off (heldRemote={sync_heldRemote} allowattach={allowAttachPickup}");
                 pickup.pickupable = false;
             } else
             {
                 pickup.pickupable = _a_HasPickupPermissions();
-                Debug.Log($"SPP: perms {pickup.pickupable}");
             }
         }
 
         public bool _a_HasPickupPermissions()
         {
-            if (targetPlayerId == -1 || VRCPlayerApi.GetPlayerCount() == 1)
+            if (sync_targetPlayer == -1 || VRCPlayerApi.GetPlayerCount() == 1)
             {
                 return true;
             } else
@@ -874,7 +788,6 @@ namespace net.fushizen.attachable
 
         public override void OnDeserialization()
         {
-            Debug.Log("OnDeserialization");
             _a_UpdateTracking();
             _a_SetPickupPerms();
             _a_SyncAnimator();

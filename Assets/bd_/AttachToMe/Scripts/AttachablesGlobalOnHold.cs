@@ -23,7 +23,7 @@ using VRC.Udon.Common;
 namespace net.fushizen.attachable
 {
     /// <summary>
-    /// Controls tutorial activation and prevention of multiple pickup activation.
+    /// Controls tutorial activation
     /// </summary>
     [DefaultExecutionOrder(-2)]
     public class AttachablesGlobalOnHold : UdonSharpBehaviour
@@ -224,9 +224,9 @@ namespace net.fushizen.attachable
 
         float lastPickup;
 
-        public bool _a_OnPickup(Attachable a, VRC_Pickup.PickupHand hand)
+        public void _a_OnPickup(Attachable a, VRC_Pickup.PickupHand hand)
         {
-            if (activeHeld != null && activeHeld != a) return false;
+            if (activeHeld != null && activeHeld != a) return;
 
             activeHeld = a;
 
@@ -246,8 +246,6 @@ namespace net.fushizen.attachable
             }
 
             lastPickup = Time.timeSinceLevelLoad;
-
-            return true;
         }
 
         public void _a_OnDrop(Attachable a)

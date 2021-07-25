@@ -12,9 +12,12 @@ namespace net.fushizen.attachable {
     [DefaultExecutionOrder(0)]
     public class AttachableBoneSelection : UdonSharpBehaviour
     {
-        // TODO: In OnOwnershipTransferred we cleared closestBoneDistance; see if this logic needs forward porting.
-
-
+        /// <summary>
+        /// Controls how many seconds to retain bone scan data after dropping.
+        /// 
+        /// If the same pickup is re-picked-up within this time, we'll continue the bone selection cycle where they
+        /// left off instead of re-scanning from scratch.
+        /// </summary>
         readonly float RETAIN_CYCLE_TIME = 4.0f;
 
         /// <summary>
@@ -23,8 +26,17 @@ namespace net.fushizen.attachable {
         /// </summary>
         private float PLAYER_LEEWAY = 2.0f;
 
+        /// <summary>
+        /// Output parameter for _a_EndSelection - indicates the player selected for tracking, or -1 if the pickup should not track.
+        /// </summary>
         [HideInInspector]
-        public int _a_trackingPlayer, _a_trackingBone;
+        public int _a_trackingPlayer;
+
+        /// <summary>
+        /// Output parameter for _a_EndSelection - indicates the bone selected for tracking, or -1 if the pickup should not track.
+        /// </summary>
+        [HideInInspector]
+        public int _a_trackingBone;
 
         void Start()
         {
@@ -41,15 +53,17 @@ namespace net.fushizen.attachable {
         AttachablesGlobalOnHold onHold;
         AttachablesGlobalTracking globalTracking;
 
-        float globalTrackingScale;
-
+        /// <summary>
         /// Transform for the beam shown from the pickup to the bone
+        /// </summary>
         private Transform t_traceMarker;
 
-        /// Root transform for the bone display mode
+        /// <summary>Root transform for the bone display mode</summary>
         private Transform t_boneModelRoot;
 
+        /// <summary>
         /// The gameobject holding the renderer for the prism representing the body of the bone
+        /// </summary>
         private GameObject obj_boneModelBody;
 
         /// <summary>
@@ -63,7 +77,6 @@ namespace net.fushizen.attachable {
             globalTracking = GetComponent<AttachablesGlobalTracking>();
             onHold = GetComponent<AttachablesGlobalOnHold>();
 
-            globalTrackingScale = transform.localScale.x;
             t_traceMarker = transform.Find("TraceMarker");
             t_boneModelRoot = transform.Find("BoneMarkerRoot");
             obj_boneModelBody = t_boneModelRoot.Find("boneMarker/Bone").gameObject;
@@ -86,11 +99,29 @@ namespace net.fushizen.attachable {
 
         #region Selection state
 
+        /// <summary>
+        /// The currently active attachable, or null if we're not selecting currently.
+        /// </summary>
         Attachable activeAttachable;
+
+        /// <summary>
+        /// The attachable selected previously (or null if we've never picked up anything)
+        /// </summary>
         Attachable lastAttachable;
+
+        /// <summary>
+        /// Time (since level load) of the last time we dropped a pickup.
+        /// </summary>
         float lastPickup;
+
+        /// <summary>
+        /// Time (since level load) of the last time we issued a "next bone" command, or -1 if we haven't done so (recently)
+        /// </summary>
         float lastBoneAdvance;
 
+        /// <summary>
+        /// Time the trigger was pulled down, or -1 if it's currently up
+        /// </summary>
         float triggerDownTime;
 
         // Values copied from the attachable
@@ -100,7 +131,19 @@ namespace net.fushizen.attachable {
         VRC_Pickup.PickupHand currentHand;
         bool preferSelf;
 
-        int targetPlayerId, targetBoneId;
+        /// <summary>
+        /// The current target player ID; this is the ID of the player that the displayed bone model is tracking,
+        /// so it can be set even when not locked.
+        /// </summary>
+        int targetPlayerId;
+        /// <summary>
+        /// The current target bone ID; this is the ID of the bone that the displayed bone model is tracking,
+        /// so it can be set even when not locked.
+        /// </summary>
+        int targetBoneId;
+        /// <summary>
+        /// True if we're locked (bone is green or red) and will attempt to track (if in range) when the pickup is dropped.
+        /// </summary>
         bool tracking;
 
         #endregion
@@ -136,7 +179,7 @@ namespace net.fushizen.attachable {
 
         // pseudo-ref parameters
         float boneDistance, trueBoneDistance;
-        Vector3 nearestPointBone, nearestPointRay, selectedBoneRoot, selectedBoneChildPos;
+        Vector3 nearestPointBone, selectedBoneRoot, selectedBoneChildPos;
         float boneLength;
         bool boneHasChild;
 
@@ -148,19 +191,16 @@ namespace net.fushizen.attachable {
             return Vector3.Dot(ac, ab) / ab.sqrMagnitude;
         }
 
-
-        Vector3 NearestPointToSphere(Vector3 target, Vector3 raySource, Vector3 rayDirection)
-        {
-            Vector3 one = new Vector3(1, 1, 1);
-
-            float initialDeriv = Vector3.Dot(raySource, one) - Vector3.Dot(target, one);
-            float deltaTime = Vector3.Dot(rayDirection, one);
-            float t = initialDeriv / (-deltaTime);
-
-            return raySource + t * rayDirection;
-        }
-
-        bool ComputeBonePosition(VRCPlayerApi player, int targetIndex)
+        /// <summary>
+        /// Computes the position and length of the bone in question.
+        /// 
+        /// Bone positions must be loaded prior to calling.
+        /// 
+        /// Output is returned in fields: selectedBoneRoot, selectedBoneChildPos, boneLength, boneHasChild
+        /// </summary>
+        /// <param name="targetIndex"></param>
+        /// <returns></returns>
+        bool ComputeBonePosition(int targetIndex)
         {
             if (targetIndex < 0 || targetIndex >= bone_targets.Length) return false;
             if (disableFingerSelection && targetIndex >= 19 && targetIndex < 49) return false;
@@ -241,7 +281,19 @@ namespace net.fushizen.attachable {
             return true;
         }
 
-        // Returns the estimated distance to a bone, or -1 if not targetable
+        /// <summary>
+        /// Computes the estimated (adjusted) distance to a bone, or -1 if not targetable.
+        /// 
+        /// Bone positions must be loaded prior to calling.
+        /// 
+        /// Output is returned in fields: trueBoneDistance holds the raw distance to the bone, while boneDistance has
+        /// the distance adjusted for directionality. nearestPointBone has the point on the bone closest to the pickup.
+        /// 
+        /// This function invokes ComputeBonePosition as a side-effect.
+        /// </summary>
+        /// <param name="player">Target player</param>
+        /// <param name="targetIndex">Target bone index</param>
+        /// <returns>True if the bone is a valid candidate, false if not (in which case no guarantees are made about the value of any output fields)</returns>
         bool DistanceToBone(VRCPlayerApi player, int targetIndex)
         {
             Vector3 raySource = t_attachmentDirection.position;
@@ -256,14 +308,13 @@ namespace net.fushizen.attachable {
                 }
             }
 
-            if (!ComputeBonePosition(player, targetIndex))
+            if (!ComputeBonePosition(targetIndex))
             {
                 return false;
             }
 
             if (!boneHasChild)
             {
-                nearestPointRay = raySource;
                 nearestPointBone = selectedBoneRoot;
             } else
             {
@@ -274,13 +325,12 @@ namespace net.fushizen.attachable {
                 else if (t < 0) t = 0;
 
                 nearestPointBone = selectedBoneRoot + velo * t;
-                nearestPointRay = raySource;
             }
 
             var directionalVector = t_attachmentDirection.TransformDirection(Vector3.forward);
 
-            trueBoneDistance = Vector3.Distance(nearestPointRay, nearestPointBone);
-            boneDistance = trueBoneDistance - directionality * Mathf.Abs(Vector3.Dot(nearestPointBone - nearestPointRay, directionalVector));
+            trueBoneDistance = Vector3.Distance(raySource, nearestPointBone);
+            boneDistance = trueBoneDistance - directionality * Mathf.Abs(Vector3.Dot(nearestPointBone - raySource, directionalVector));
             
             return true;
         }
@@ -405,6 +455,11 @@ namespace net.fushizen.attachable {
 
         readonly float secondaryCandidateMult = 3;
 
+        /// <summary>
+        /// Contains a binary min-heap of bone IDs in the targeted player, sorted by adjusted distance.
+        /// 
+        /// The related fields prefBoneDistances and prefBoneLength contain the associated adjusted distances and the number of elements in the heap.
+        /// </summary>
         int[] prefBoneIds;
         float[] prefBoneDistances;
         int prefBoneLength;
@@ -511,8 +566,6 @@ namespace net.fushizen.attachable {
         {
             int nBones = bone_targets.Length;
 
-            Vector3 bestBoneRoot = Vector3.zero, bestBoneChild = Vector3.zero;
-
             var sw = new System.Diagnostics.Stopwatch();
             sw.Start();
 
@@ -522,7 +575,6 @@ namespace net.fushizen.attachable {
             prefBoneDistances[0] = 99999;
 
             float bestPrefDist = 9999;
-            float bestTrueDist = 9999;
 
             if (lastBonePosLoadFrame != Time.frameCount)
             {
@@ -537,7 +589,6 @@ namespace net.fushizen.attachable {
                 if (boneDistance < bestPrefDist)
                 {
                     bestPrefDist = boneDistance;
-                    bestTrueDist = trueBoneDistance;
                 }
 
                 if (trueBoneDistance > range)
@@ -729,13 +780,13 @@ namespace net.fushizen.attachable {
 
                 if (!boneHasChild)
                 {
-                    t_boneModelRoot.localScale = new Vector3(0.1f, 0.1f, 0.1f) / globalTrackingScale;
+                    t_boneModelRoot.localScale = new Vector3(0.1f, 0.1f, 0.1f);
                     t_boneModelRoot.rotation = Quaternion.identity;
                     obj_boneModelBody.SetActive(false);
                 }
                 else
                 {
-                    t_boneModelRoot.localScale = new Vector3(boneLength, boneLength, boneLength) / globalTrackingScale;
+                    t_boneModelRoot.localScale = new Vector3(boneLength, boneLength, boneLength);
                     t_boneModelRoot.rotation = Quaternion.LookRotation(selectedBoneChildPos - selectedBoneRoot);
                     obj_boneModelBody.SetActive(true);
                 }
@@ -747,7 +798,7 @@ namespace net.fushizen.attachable {
                 t_traceMarker.position = traceSource;
                 t_traceMarker.rotation = Quaternion.LookRotation(traceTarget - traceSource);
                 t_traceMarker.localScale =
-                    transform.lossyScale.magnitude * Vector3.Distance(traceSource, traceTarget) * new Vector3(0.5f, 0.5f, 0.5f) / globalTrackingScale;
+                    transform.lossyScale.magnitude * Vector3.Distance(traceSource, traceTarget) * new Vector3(0.5f, 0.5f, 0.5f);
                 t_traceMarker.gameObject.SetActive(true);
 
                 Color color = Color.blue;
@@ -870,7 +921,7 @@ namespace net.fushizen.attachable {
                 }
 
                 // Check that bone is in range
-                if (!ComputeBonePosition(player, targetBoneId))
+                if (!ComputeBonePosition(targetBoneId))
                 {
                     continue;
                 }
