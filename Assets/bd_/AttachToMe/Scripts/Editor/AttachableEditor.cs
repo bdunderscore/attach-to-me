@@ -41,6 +41,7 @@ namespace net.fushizen.attachable
         SerializedProperty m_disableFingerTracking;
         SerializedProperty m_respawnTime;
         SerializedProperty m_trackOnUpdate;
+        SerializedProperty m_useObjectSync;
 
         SerializedProperty m_perm_removeTracee;
         SerializedProperty m_perm_removeOwner;
@@ -62,6 +63,7 @@ namespace net.fushizen.attachable
             public GUIContent m_preferSelf;
             public GUIContent m_disableFingerTracking;
             public GUIContent m_respawnTime;
+            public GUIContent m_useObjectSync;
 
             public GUIContent m_t_attachmentDirection;
             public GUIContent m_directionality;
@@ -103,6 +105,8 @@ namespace net.fushizen.attachable
                 m_t_attachmentDirection = new GUIContent("方向マーカー", "このオブジェクトのZ+方向と位置を基準にボーンの選択を行います"),
                 m_disableFingerTracking = new GUIContent("指ボーンに追従しない"),
                 m_respawnTime = new GUIContent("リスポーン時間", "設定時間以上放置されていると、初期地点に戻ります。秒数で入力、ゼロで無効化できます。"),
+                m_useObjectSync = new GUIContent("ObjectSyncを利用", "手に持っているときの同期をObjectSyncで行う。チェックを入れたほうはずれが少ないが、負荷が大きくなる。\n" +
+                "なお、利用しない場合の動きのずれは手に持っているときのみに発生しますが、利用する時の負荷は追尾中でも発生します。"),
                 warn_direction = new GUIContent("方向マーカーをプレハブの子に設定してください"),
                 header_pickup_perms = new GUIContent("取り外しできるプレイヤーの設定"),
                 header_pickup_perms_2 = new GUIContent("追尾しているピックアップを取り外せるプレイヤーを設定できます。"),
@@ -135,6 +139,8 @@ namespace net.fushizen.attachable
                 m_t_attachmentDirection = new GUIContent("Direction marker", "This object's Z+ direction and position will be used as the basis for bone selection."),
                 m_disableFingerTracking = new GUIContent("Disable finger bone tracking"),
                 m_respawnTime = new GUIContent("Respawn time ", "If the prop is left idle for longer than this time, it will return to its initial position. Expressed in seconds, zero to disable."),
+                m_useObjectSync = new GUIContent("Use ObjectSync when held", "When held, sync position using Object Sync. This improves sync while the prop is held in hand, but results in higher overhead.\n" +
+                "Note that the improvement in sync matters only while held, while the overhead is incurred even when tracking a bone."),
                 warn_direction = new GUIContent("Please ensure that the direction marker is a child of the pickup object."),
                 header_pickup_perms = new GUIContent("Removal permissions"),
                 header_pickup_perms_2 = new GUIContent("Select which players can remove a tracking pickup."),
@@ -170,6 +176,7 @@ namespace net.fushizen.attachable
             m_disableFingerTracking = serializedObject.FindProperty("disableFingerTracking");
             m_trackOnUpdate = serializedObject.FindProperty("trackOnUpdate");
             m_respawnTime = serializedObject.FindProperty("respawnTime");
+            m_useObjectSync = serializedObject.FindProperty("useObjectSync");
 
             m_perm_removeTracee = serializedObject.FindProperty("perm_removeTracee");
             m_perm_removeOwner = serializedObject.FindProperty("perm_removeOwner");
@@ -226,6 +233,8 @@ namespace net.fushizen.attachable
                 // Leaving it in (available in the debug inspector) just in case for now.
                 //EditorGUILayout.PropertyField(m_trackOnUpdate, lang.m_trackOnUpdate);
                 EditorGUILayout.PropertyField(m_respawnTime, lang.m_respawnTime);
+
+                EditorGUILayout.PropertyField(m_useObjectSync, lang.m_useObjectSync);
 
                 EditorGUILayout.Space();
             }

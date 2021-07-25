@@ -153,6 +153,7 @@ namespace net.fushizen.attachable
         #region Core tracking state state
 
         // When tracking a bone, contains the position and rotation offset relative to that bone.
+        // When not tracking a bone, contains the local position/rotation of this object (if objectsync is not in use)
         [UdonSynced]
         Vector3 sync_pos;
         [UdonSynced]
@@ -283,8 +284,85 @@ namespace net.fushizen.attachable
 
             updateLoop.enabled = false;
             postLateUpdateLoop.enabled = false;
+
+            sync_pos = t_pickup.localPosition;
+            sync_rot = t_pickup.localRotation;
         }
 
+
+        #endregion
+
+        #region Pseudo-object-sync
+
+        /// <summary>
+        /// How often to sync the position of the held pickup. This only really affects either generic avatars,
+        /// or full-body-tracking avatars whose hip tracker has gone flying off into the distance; in other circumstances,
+        /// we're tracking either the head (for desktop) or hand (for VR), which means we'll have up-to-date position information
+        /// based on IK.
+        /// </summary>
+        readonly float heldSyncEvalInterval = 0.1f;
+
+
+        /// <summary>
+        /// Sync data is updated either once per slos interval, or if the error is too high (eg, we're in a generic avatar and can't track a bone)
+        /// once per eval interval.
+        /// </summary>
+        readonly float heldSyncSlowInterval = 0.5f;
+
+        float lastHeldSyncTransmit = -1;
+
+        readonly float heldSyncPosError = 0.02f; // 2cm
+        readonly float heldSyncAngError = 5; // degrees
+
+        bool isSyncScheduled;
+
+        /// <summary>
+        /// Entry point for periodic held-position-sync activities. This should only be used from the SendCustomEventDelayedSeconds
+        /// call in SyncHeldPosition.
+        /// </summary>
+        public void _a_SyncHeldPosition()
+        {
+            isSyncScheduled = false;
+
+            SyncHeldPosition();
+        }
+
+        /// <summary>
+        /// Updates data used to sync the position of the prop while held (assuming object sync is not in use).
+        /// This will schedule itself to be re-executed periodically until dropped.
+        /// </summary>
+        void SyncHeldPosition() {
+            if (objectSync != null || !Networking.IsOwner(gameObject)) return;
+
+            if (isHeldLocally)
+            {
+                var localPlayer = Networking.LocalPlayer;
+                var targetBone = BONE_HEAD;
+
+                if (localPlayer.IsUserInVR())
+                {
+                    targetBone = pickup.currentHand == VRC_Pickup.PickupHand.Left ? BONE_LEFT_HAND : BONE_RIGHT_HAND;
+                }
+
+                var priorPos = sync_pos;
+                var priorRot = sync_rot;
+
+                var wasTracking = sync_targetBone == targetBone && sync_targetPlayer == localPlayer.playerId;
+                var trackSuccess = TrackBoneRaw(localPlayer.playerId, targetBone);
+                var isTracking = sync_targetPlayer == localPlayer.playerId;
+
+                var needFastSync = (wasTracking != isTracking) || Vector3.Distance(priorPos, sync_pos) > heldSyncPosError || Quaternion.Angle(priorRot, sync_rot) > heldSyncAngError;
+
+                if (needFastSync || lastHeldSyncTransmit < Time.timeSinceLevelLoad - heldSyncSlowInterval)
+                {
+                    RequestSerialization();
+                    lastHeldSyncTransmit = Time.timeSinceLevelLoad;
+                }
+            
+                SendCustomEventDelayedSeconds(nameof(_a_SyncHeldPosition), heldSyncEvalInterval);
+                isSyncScheduled = true;
+            }
+        }
 
         #endregion
 
@@ -436,6 +514,8 @@ namespace net.fushizen.attachable
             transitionEndTime = -1;
 
             sync_targetPlayer = sync_targetBone = -1;
+            sync_pos = t_pickup.localPosition;
+            sync_rot = t_pickup.localRotation;
 
             SetTrackingEnabled(false);
             _a_SetPickupPerms();
@@ -445,12 +525,12 @@ namespace net.fushizen.attachable
         }
 
         /// <summary>
-        /// Tracks the specified player and bone, computing the position/rotation offsets based on present world position.
+        /// Tracks the specified player and bone, but does not update pickup state, animator, etc.
         /// </summary>
         /// <param name="playerId">Target player</param>
         /// <param name="boneId">Target bone</param>
         /// <returns>True if successful, false if we could not track this bone (in which case we will track world position)</returns>
-        bool TrackBone(int playerId, int boneId)
+        bool TrackBoneRaw(int playerId, int boneId)
         {
             transitionEndTime = -1;
 
@@ -468,11 +548,25 @@ namespace net.fushizen.attachable
 
             sync_seqno++;
 
-            SetTrackingEnabled(true);
+            return true;
+        }
+
+
+        /// <summary>
+        /// Tracks the specified player and bone, computing the position/rotation offsets based on present world position.
+        /// </summary>
+        /// <param name="playerId">Target player</param>
+        /// <param name="boneId">Target bone</param>
+        /// <returns>True if successful, false if we could not track this bone (in which case we will track world position)</returns>
+        bool TrackBone(int playerId, int boneId)
+        {
+            bool success = TrackBoneRaw(playerId, boneId);
+
+            SetTrackingEnabled(success);
             _a_SetPickupPerms();
             _a_SyncAnimator();
 
-            return true;
+            return success;
         }
 
         /// <summary>
@@ -531,32 +625,49 @@ namespace net.fushizen.attachable
                 {
                     // Whoops, someone else stole it
                     pickup.Drop();
+                } else
+                {
+                    return;
                 }
             }
 
             var isTracking = (sync_targetPlayer >= 0);
 
-            if (isTracking != (_tracking_index != -1))
-            {
-                SetTrackingEnabled(isTracking);
-            }
+            SetTrackingEnabled(isTracking || transitionEndTime > Time.timeSinceLevelLoad || sync_seqno != last_seqno);
 
-            if (!isTracking || isHeldLocally)
-            {
-                return;
-            }
-
-            if (!UpdateBonePosition()) {
+            if (isTracking && !UpdateBonePosition()) {
                 if (Networking.IsOwner(gameObject))
                 {
                     ClearTracking();
                     RequestSerialization();
                 }
+                Debug.Log($"Failed to track stp={sync_targetPlayer} bone={sync_targetBone}");
                 return;
             }
 
-            var pos = boneRotation * sync_pos + bonePosition;
-            var rot = boneRotation * sync_rot;
+            // World position and rotation
+            Vector3 pos;
+            Quaternion rot;
+
+            if (isTracking)
+            {
+                pos = boneRotation * sync_pos + bonePosition;
+                rot = boneRotation * sync_rot;
+            } else
+            {
+                // synced position and rotation are relative to the transform's parent
+                var parent = t_pickup.parent;
+
+                if (parent != null)
+                {
+                    pos = parent.TransformPoint(sync_pos);
+                    rot = parent.rotation * sync_rot; 
+                } else
+                {
+                    pos = sync_pos;
+                    rot = sync_rot;
+                }
+            }
 
             if (sync_seqno != last_seqno)
             {
@@ -598,6 +709,8 @@ namespace net.fushizen.attachable
         readonly int BONE_SPINE = 7;
         readonly int BONE_NECK = 9;
         readonly int BONE_HEAD = 10;
+        readonly int BONE_LEFT_HAND = 17;
+        readonly int BONE_RIGHT_HAND = 18;
 
         void InitBoneData()
         {
@@ -890,6 +1003,7 @@ namespace net.fushizen.attachable
 
             _a_SyncAnimator();
             ClearRespawnTimer();
+            SyncHeldPosition();
         }
 
         public void _a_OnDrop()
@@ -942,10 +1056,14 @@ namespace net.fushizen.attachable
             _a_UpdateTracking();
             if (sync_heldRemote && !isHeldLocally)
             {
+                // Don't inherit bone tracking if we're stealing the pickup.
+                ClearTracking();
+
                 sync_heldRemote = false;
                 RequestSerialization();
             }
             _a_SyncAnimator();
+            _a_SetPickupPerms();
 
             // Clear cached bone-distance data, this will force a rescan the next time we pick it up.
             closestBoneDistance = 0;
@@ -991,12 +1109,14 @@ namespace net.fushizen.attachable
         {
             if (isHeldLocally) return;
 
-            if (sync_targetPlayer >= 0 && !allowAttachPickup && Time.timeSinceLevelLoad >= forcePickupEnabledUntil)
+            if (sync_heldRemote || (sync_targetPlayer >= 0 && !allowAttachPickup && Time.timeSinceLevelLoad >= forcePickupEnabledUntil))
             {
+                Debug.Log($"SPP: force off (heldRemote={sync_heldRemote} allowattach={allowAttachPickup}");
                 pickup.pickupable = false;
             } else
             {
                 pickup.pickupable = _a_HasPickupPermissions();
+                Debug.Log($"SPP: perms {pickup.pickupable}");
             }
         }
 
@@ -1021,6 +1141,7 @@ namespace net.fushizen.attachable
 
         public override void OnDeserialization()
         {
+            Debug.Log("OnDeserialization");
             _a_UpdateTracking();
             _a_SetPickupPerms();
             _a_SyncAnimator();
@@ -1349,8 +1470,6 @@ namespace net.fushizen.attachable
                 targetPlayerId = FindPlayer();
                 if (targetPlayerId < 0)
                 {
-                    if (tracking) RequestSerialization();
-
                     return null;
                 }
             }
@@ -1363,7 +1482,6 @@ namespace net.fushizen.attachable
                 {
                     tracking = false;
                     targetPlayerId = -1;
-                    RequestSerialization();
                 }
                 return null;
             }
@@ -1449,7 +1567,6 @@ namespace net.fushizen.attachable
             if (tracking && trigger_wasHeld[0] && trigger_sameHand_lastChange + 3.0f < Time.timeSinceLevelLoad)
             {
                 tracking = false;
-                RequestSerialization();
             }
 
             if (!LoadBoneData(player)) return;
@@ -1476,7 +1593,6 @@ namespace net.fushizen.attachable
 
                     // Stop tracking, since we're forcing a bone change
                     tracking = false;
-                    RequestSerialization();
                 }
 
                 if (prefBoneLength == 0)
@@ -1641,8 +1757,8 @@ namespace net.fushizen.attachable
         {
             if (c_animator == null) return;
 
-            if (anim_onTrack != null) c_animator.SetBool(anim_onTrack, sync_targetPlayer >= 0);
-            if (anim_onTrackLocal != null) c_animator.SetBool(anim_onTrackLocal, sync_targetPlayer == Networking.LocalPlayer.playerId);
+            if (anim_onTrack != null) c_animator.SetBool(anim_onTrack, !sync_heldRemote && sync_targetPlayer >= 0);
+            if (anim_onTrackLocal != null) c_animator.SetBool(anim_onTrackLocal, !sync_heldRemote && sync_targetPlayer == Networking.LocalPlayer.playerId);
             if (anim_onHeld != null) c_animator.SetBool(anim_onHeld, sync_heldRemote);
             if (anim_onHeldLocal != null) c_animator.SetBool(anim_onHeldLocal, isHeldLocally);
         }
