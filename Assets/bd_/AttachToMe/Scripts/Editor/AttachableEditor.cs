@@ -234,7 +234,9 @@ namespace net.fushizen.attachable
                 //EditorGUILayout.PropertyField(m_trackOnUpdate, lang.m_trackOnUpdate);
                 EditorGUILayout.PropertyField(m_respawnTime, lang.m_respawnTime);
 
-                EditorGUILayout.PropertyField(m_useObjectSync, lang.m_useObjectSync);
+                // TESTING: Force disable for now
+                //EditorGUILayout.PropertyField(m_useObjectSync, lang.m_useObjectSync);
+                m_useObjectSync.boolValue = false;
 
                 EditorGUILayout.Space();
             }

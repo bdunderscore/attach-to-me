@@ -22,7 +22,7 @@ using VRC.Udon.Common;
 
 namespace net.fushizen.attachable
 {
-    [DefaultExecutionOrder(-1)]
+    [DefaultExecutionOrder(-3)]
     public class AttachablesGlobalTracking : UdonSharpBehaviour
     {
         readonly float PICKUP_TIMEOUT = 4.0f;

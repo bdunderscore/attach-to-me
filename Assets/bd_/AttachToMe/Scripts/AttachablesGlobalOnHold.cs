@@ -25,6 +25,7 @@ namespace net.fushizen.attachable
     /// <summary>
     /// Controls tutorial activation and prevention of multiple pickup activation.
     /// </summary>
+    [DefaultExecutionOrder(-2)]
     public class AttachablesGlobalOnHold : UdonSharpBehaviour
     {
         public Animator desktopTutorial;
@@ -39,6 +40,7 @@ namespace net.fushizen.attachable
         public AttachablesGlobalTracking globalTracking;
 
         Attachable activeHeld;
+        AttachableBoneData boneData;
 
         bool tut_boneSelect, tut_playerSelect, tut_pickup;
 
@@ -48,6 +50,8 @@ namespace net.fushizen.attachable
         void Start()
         {
             tut_boneSelect = tut_playerSelect = tut_pickup = false;
+
+            boneData = GetComponent<AttachableBoneData>();
 
             ConfigurePin(pin_selectBone);
             ConfigurePin(pin_selectPlayer);
@@ -171,8 +175,9 @@ namespace net.fushizen.attachable
 
                     if (obj._a_GetTrackingPlayer() == myPlayerId)
                     {
-                        if (obj._a_HeldInLeftHand(trackingBone) && rhDist >= distLimit) continue;
-                        if (obj._a_HeldInRightHand(trackingBone) && lhDist >= distLimit) continue;
+                        var obj_curHand = boneData._a_GetTrackingHand(trackingBone);
+                        if (VRC_Pickup.PickupHand.Left.Equals(obj_curHand) && rhDist >= distLimit) continue;
+                        if (VRC_Pickup.PickupHand.Right.Equals(obj_curHand) && lhDist >= distLimit) continue;
                     }
 
                     pin_pickup.trackObject = obj.t_attachmentDirection;
@@ -256,21 +261,6 @@ namespace net.fushizen.attachable
                 pin_selectBone._a_SetShouldDisplay(false);
                 pin_selectPlayer._a_SetShouldDisplay(false);
             }
-        }
-
-        bool[] wasHeld = new bool[2];
-        public override void InputUse(bool value, UdonInputEventArgs args)
-        {
-            int index = args.handType == HandType.LEFT ? 0 : 1;
-
-            if (lastPickup + 0.25f > Time.timeSinceLevelLoad) return;
-
-            if (activeHeld != null && wasHeld[index] != value)
-            {
-                activeHeld._a_InputUse(args.handType, value);
-            }
-
-            wasHeld[index] = value;
         }
     }
 }
