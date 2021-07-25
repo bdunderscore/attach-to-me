@@ -187,6 +187,14 @@ namespace net.fushizen.attachable
 
             bool enablePickup = pos < -0.7f || alt;
 
+            if (enablePickup)
+            {
+                pickupsEnabledUntil = Time.timeSinceLevelLoad + PICKUP_TIMEOUT;
+                if (!cur_enabled) nextEvalSlot = 0;
+
+                cur_enabled = true;
+            }
+
             if (cur_enabled && pickupsEnabledUntil < Time.timeSinceLevelLoad)
             {
                 nextEvalSlot = 0;
