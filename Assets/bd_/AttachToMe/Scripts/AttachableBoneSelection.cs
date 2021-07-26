@@ -52,6 +52,7 @@ namespace net.fushizen.attachable {
         AttachableBoneData boneData;
         AttachablesGlobalOnHold onHold;
         AttachablesGlobalTracking globalTracking;
+        AttachableInternalBoneHeap boneHeap;
 
         /// <summary>
         /// Transform for the beam shown from the pickup to the bone
@@ -76,6 +77,7 @@ namespace net.fushizen.attachable {
             boneData = GetComponent<AttachableBoneData>();
             globalTracking = GetComponent<AttachablesGlobalTracking>();
             onHold = GetComponent<AttachablesGlobalOnHold>();
+            boneHeap = GetComponent<AttachableInternalBoneHeap>();
 
             t_traceMarker = transform.Find("TraceMarker");
             t_boneModelRoot = transform.Find("BoneMarkerRoot");
@@ -330,7 +332,7 @@ namespace net.fushizen.attachable {
             var directionalVector = t_attachmentDirection.TransformDirection(Vector3.forward);
 
             trueBoneDistance = Vector3.Distance(raySource, nearestPointBone);
-            boneDistance = trueBoneDistance - directionality * Mathf.Abs(Vector3.Dot(nearestPointBone - raySource, directionalVector));
+            boneDistance = trueBoneDistance - directionality * Mathf.Max(0, Vector3.Dot(nearestPointBone - raySource, directionalVector));
             
             return true;
         }
@@ -366,8 +368,9 @@ namespace net.fushizen.attachable {
             targetBoneId = curBone;
 
             tracking = false;
-            if (targetPlayerId >= 0 && TargetPlayerValid())
+            if (targetPlayerId >= 0 && targetBoneId >= 0)
             {
+                tracking = true; // enable tracking, for now...
                 if (targetBoneId >= 0)
                 {
                     tracking = true;
@@ -377,6 +380,8 @@ namespace net.fushizen.attachable {
                 {
                     // Enable tracking, but restart the bone selection cycle.
                     var player = VRCPlayerApi.GetPlayerById(targetPlayerId);
+                    finalPlayerId = finalBoneId = -1;
+
                     BoneScan(player);
                 }
             }
@@ -455,87 +460,9 @@ namespace net.fushizen.attachable {
 
         readonly float secondaryCandidateMult = 3;
 
-        /// <summary>
-        /// Contains a binary min-heap of bone IDs in the targeted player, sorted by adjusted distance.
-        /// 
-        /// The related fields prefBoneDistances and prefBoneLength contain the associated adjusted distances and the number of elements in the heap.
-        /// </summary>
-        int[] prefBoneIds;
-        float[] prefBoneDistances;
-        int prefBoneLength;
-
-        void HeapSwap(int a, int b)
-        {
-            float td = prefBoneDistances[a];
-            prefBoneDistances[a] = prefBoneDistances[b];
-            prefBoneDistances[b] = td;
-
-            int ti = prefBoneIds[a];
-            prefBoneIds[a] = prefBoneIds[b];
-            prefBoneIds[b] = ti;
-        }
-
-        void HeapPush(int boneId, float dist)
-        {
-            int i = prefBoneLength++;
-            prefBoneIds[i] = boneId;
-            prefBoneDistances[i] = dist;
-
-            while (i > 0)
-            {
-                int parent = (i - 1) >> 1;
-
-                if (dist < prefBoneDistances[parent])
-                {
-                    HeapSwap(i, parent);
-                    i = parent;
-                }
-                else
-                {
-                    break;
-                }
-            }
-        }
-
-        int HeapPop()
-        {
-
-            if (prefBoneLength == 0)
-                return -1;
-
-            // pop and swap max to end
-            int i = --prefBoneLength;
-
-            HeapSwap(0, i);
-
-            // restore heap
-            float d = prefBoneDistances[0];
-            for (int j = 0; j < i;)
-            {
-                int c1 = (j << 1) + 1;
-                int c2 = c1 + 1;
-
-                float d1 = c1 < i ? prefBoneDistances[c1] : 99999;
-                float d2 = c2 < i ? prefBoneDistances[c2] : 99999;
-
-                if (d1 < d && d1 < d2) // move higher parent to the smaller child
-                {
-                    HeapSwap(j, c1);
-                    j = c1;
-                }
-                else if (d2 < d)
-                {
-                    HeapSwap(j, c2);
-                    j = c2;
-                }
-                else
-                {
-                    break;
-                }
-            }
-
-            return i;
-        }
+        float[] distanceBuffer;
+        Vector3[] boneLengthBuffer;
+        float[] boneTrueDistanceBuffer;
 
         bool LoadBoneData(VRCPlayerApi player)
         {
@@ -543,6 +470,7 @@ namespace net.fushizen.attachable {
             if (bonePosReader == null)
             {
                 globalTracking._a_RespawnBoneReader();
+                bonePosReader = globalTracking.bonePosReader;
             }
 
             bonePosReader.successful = false;
@@ -562,278 +490,208 @@ namespace net.fushizen.attachable {
             return true;
         }
 
-        void BoneScan(VRCPlayerApi player)
+        Vector3 singleBonePos;
+        Quaternion singleBoneRot;
+
+        bool LoadSingleBoneData(VRCPlayerApi player, int boneId)
         {
+            if (boneId < 0 || boneId >= bone_targets.Length || !Utilities.IsValid(player)) return false;
+
+            var bonePosReader = globalTracking.bonePosReader;
+            if (bonePosReader == null)
+            {
+                globalTracking._a_RespawnBoneReader();
+                bonePosReader = globalTracking.bonePosReader;
+            }
+
+            bonePosReader.successful = false;
+            bonePosReader._a_AcquireSingleBoneData(player, (HumanBodyBones) bone_targets[boneId]);
+            if (!bonePosReader.successful)
+            {
+                // respawn the (potentially dead) bone reader if necessary
+                globalTracking._a_RespawnBoneReader();
+                return false;
+            }
+
+            singleBonePos = bonePosReader.singleBonePos;
+            singleBoneRot = bonePosReader.singleBoneRot;
+
+            return true;
+        }
+
+        VRCPlayerApi[] boneScanPlayers;
+        int nextBoneScanPlayerIndex, boneScanPlayerCount;
+
+        void ScanNextPlayer()
+        {
+            //var sw = new System.Diagnostics.Stopwatch();
+            //sw.Start();
+
+            VRCPlayerApi player;
+
+            if (boneScanPlayers == null) boneScanPlayers = new VRCPlayerApi[0];
+
+            float maxDistance = range + PLAYER_LEEWAY;
+            var pos = t_attachmentDirection.position;
+
+            while (nextBoneScanPlayerIndex < boneScanPlayerCount
+                && (!Utilities.IsValid(boneScanPlayers[nextBoneScanPlayerIndex])
+                    || Vector3.Distance(boneScanPlayers[nextBoneScanPlayerIndex].GetPosition(), pos) > maxDistance)
+            )
+            {
+                nextBoneScanPlayerIndex++;
+            }
+
+            if (nextBoneScanPlayerIndex == boneScanPlayerCount)
+            {
+                boneScanPlayerCount = VRCPlayerApi.GetPlayerCount();
+                if (boneScanPlayers.Length < boneScanPlayerCount)
+                {
+                    boneScanPlayers = new VRCPlayerApi[boneScanPlayerCount];
+                }
+                boneScanPlayers = VRCPlayerApi.GetPlayers(boneScanPlayers);
+                nextBoneScanPlayerIndex = 0;
+                return;
+            } else
+            {
+                player = boneScanPlayers[nextBoneScanPlayerIndex++];
+            }
+
+            BoneScan(player);
+        }
+
+        void BoneScan(VRCPlayerApi player) {
+            LoadBoneData(player);
+
             int nBones = bone_targets.Length;
+            
+            if (distanceBuffer == null)
+            {
+                distanceBuffer = new float[nBones];
+                boneLengthBuffer = new Vector3[nBones];
+                boneTrueDistanceBuffer = new float[nBones];
+            }
 
-            var sw = new System.Diagnostics.Stopwatch();
-            sw.Start();
-
-            prefBoneIds = new int[bone_targets.Length];
-            prefBoneDistances = new float[bone_targets.Length];
-            prefBoneLength = 0;
-            prefBoneDistances[0] = 99999;
-
-            float bestPrefDist = 9999;
+            float bestPrefDist = boneHeap._a_BestBoneDistance();
 
             if (lastBonePosLoadFrame != Time.frameCount)
             {
-                if (!LoadBoneData(player)) return;
+                if (!LoadBoneData(player))
+                {
+                    Debug.Log("Failed to load bone data");
+                    return;
+                }
             }
 
             for (int i = 0; i < nBones; i++)
             {
                 boneDistance = 999;
-                bool success = DistanceToBone(player, i);
+                bool success = DistanceToBone(player, i) && trueBoneDistance <= range;
+
+                if (!success)
+                {
+                    distanceBuffer[i] = -1;
+                    continue;
+                }
+
+                // Compute bone length vector for display. For now, this is in world coordinates.
+                boneLengthBuffer[i] = boneHasChild ? selectedBoneChildPos - selectedBoneRoot : Vector3.zero;
+                boneTrueDistanceBuffer[i] = trueBoneDistance;
+
+                distanceBuffer[i] = boneDistance;
 
                 if (boneDistance < bestPrefDist)
                 {
                     bestPrefDist = boneDistance;
                 }
-
-                if (trueBoneDistance > range)
-                {
-                    continue;
-                }
-
-                if (success && boneDistance <= prefBoneDistances[0] * secondaryCandidateMult)
-                {
-                    HeapPush(i, boneDistance);
-                }
             }
 
-            if (prefBoneLength > 0)
+            for (int i = 0; i < nBones; i++)
             {
-                closestBoneDistance = prefBoneDistances[0];
+                if (distanceBuffer[i] > bestPrefDist * secondaryCandidateMult)
+                {
+                    distanceBuffer[i] = -1;
+                } else
+                {
+                    // Transform to bone coordinates
+                    boneLengthBuffer[i] = Quaternion.Inverse(bone_rotations[i]) * boneLengthBuffer[i];
+                }
             }
+
+            boneHeap._a_UpdateBatch(player, distanceBuffer, boneLengthBuffer, boneTrueDistanceBuffer);
         }
 
         #endregion
-
-        #region Player search
-        /// <summary>
-        /// Time of last player scan - similarly used to determine if we restart the player search from scratch.
-        /// </summary>
-        float lastPlayerSearch;
-        /// <summary>
-        /// Cached player array
-        /// </summary>
-        VRCPlayerApi[] playerArray;
-        /// <summary>
-        /// Number of valid players remaining in the array (starting from index 0)
-        /// </summary>
-        int playerCountInArray;
-
-        bool TargetPlayerValid()
-        {
-            var player = VRCPlayerApi.GetPlayerById(targetPlayerId);
-
-            if (!Utilities.IsValid(player)) return false;
-
-            return Vector3.Distance(player.GetPosition(), t_attachmentDirection.position) <= range + PLAYER_LEEWAY;
-        }
-
-        int FindPlayer()
-        {
-            var priorSearch = lastPlayerSearch;
-            lastPlayerSearch = Time.timeSinceLevelLoad;
-
-            if (playerCountInArray > 0 && priorSearch + 5.0f >= Time.timeSinceLevelLoad)
-            {
-                int rv = FindNextPlayer();
-                if (rv != -1) return rv;
-            }
-
-            if (playerArray == null || playerArray.Length < 128)
-            {
-                playerArray = new VRCPlayerApi[128];
-            }
-
-            playerCountInArray = VRCPlayerApi.GetPlayerCount();
-            playerArray = VRCPlayerApi.GetPlayers(playerArray);
-
-            return FindNextPlayer();
-        }
-
-        int FindNextPlayer()
-        {
-            // invalidate bone data cache
-            lastBonePosLoadFrame = -1;
-
-            float limit = range + PLAYER_LEEWAY;
-            float bestDistance = limit;
-            int bestIndex = -1;
-
-            var pickupPos = t_attachmentDirection.position;
-
-            for (int i = 0; i < playerCountInArray; i++)
-            {
-                var player = playerArray[i];
-
-                if (!Utilities.IsValid(player))
-                {
-                    // Clear this slot and continue
-                    playerArray[i] = playerArray[playerCountInArray - 1];
-                    i--;
-                    continue;
-                }
-
-                float distance = Vector3.Distance(pickupPos, player.GetPosition());
-
-                if (player.isLocal)
-                {
-                    if (preferSelf)
-                    {
-                        if (distance < limit)
-                        {
-                            bestIndex = i;
-                            break;
-                        }
-                    }
-                    else if (i < playerCountInArray - 1)
-                    {
-                        // Move self to the end of the list to evaluate last
-                        var tmp = playerArray[playerCountInArray - 1];
-                        playerArray[playerCountInArray - 1] = player;
-                        playerArray[i] = tmp;
-                        i--;
-                    }
-                    else
-                    {
-                        // Select only if we have no choice
-                        if (bestIndex == -1 && distance < limit)
-                        {
-                            bestIndex = i;
-                            bestDistance = distance;
-                        }
-                    }
-                }
-                else
-                {
-                    if (distance < bestDistance)
-                    {
-                        bestDistance = distance;
-                        bestIndex = i;
-                    }
-                }
-            }
-
-            if (bestIndex != -1)
-            {
-                // Remove from list
-                var bestPlayer = playerArray[bestIndex];
-
-                playerArray[bestIndex] = playerArray[--playerCountInArray];
-
-                return bestPlayer.playerId;
-            }
-
-            return -1;
-        }
-
-        VRCPlayerApi UpdateTrackingPlayer()
-        {
-            // Check if we need to perform a target player search. This happens only when the current player is invalid or out of range.
-            if (!TargetPlayerValid())
-            {
-                tracking = false;
-                targetPlayerId = FindPlayer();
-                if (targetPlayerId < 0)
-                {
-                    return null;
-                }
-            }
-
-            VRCPlayerApi target = VRCPlayerApi.GetPlayerById(targetPlayerId);
-            if (!Utilities.IsValid(target))
-            {
-                // Should be impossible...?
-                if (tracking)
-                {
-                    tracking = false;
-                    targetPlayerId = -1;
-                }
-                return null;
-            }
-
-            return target;
-        }
-
-        #endregion
-
 
         #region Held controls
 
         float closestBoneDistance;
 
-        void DisplayBoneModel(VRCPlayerApi target)
+        void DisplayBoneModel()
         {
-            string boneTarget = "<invalid>";
+            float trueBoneDistance = boneHeap._a_GetBoneTrueDistance(targetPlayerId, targetBoneId);
 
-            if (bone_positions == null) return; // sanity check
-
-            // Distance is needed to show out-of-range warning
-            if (DistanceToBone(target, targetBoneId))
+            if (trueBoneDistance < 0 || !LoadSingleBoneData(VRCPlayerApi.GetPlayerById(targetPlayerId), targetBoneId))
             {
-                boneTarget = bone_targets[targetBoneId].ToString();
-                t_boneModelRoot.position = selectedBoneRoot;
-
-                if (!boneHasChild)
-                {
-                    t_boneModelRoot.localScale = new Vector3(0.1f, 0.1f, 0.1f);
-                    t_boneModelRoot.rotation = Quaternion.identity;
-                    obj_boneModelBody.SetActive(false);
-                }
-                else
-                {
-                    t_boneModelRoot.localScale = new Vector3(boneLength, boneLength, boneLength);
-                    t_boneModelRoot.rotation = Quaternion.LookRotation(selectedBoneChildPos - selectedBoneRoot);
-                    obj_boneModelBody.SetActive(true);
-                }
-
-                t_boneModelRoot.gameObject.SetActive(true);
-
-                Vector3 traceTarget = boneHasChild ? Vector3.Lerp(selectedBoneRoot, selectedBoneChildPos, 0.5f) : selectedBoneRoot;
-                Vector3 traceSource = t_attachmentDirection.position;
-                t_traceMarker.position = traceSource;
-                t_traceMarker.rotation = Quaternion.LookRotation(traceTarget - traceSource);
-                t_traceMarker.localScale =
-                    transform.lossyScale.magnitude * Vector3.Distance(traceSource, traceTarget) * new Vector3(0.5f, 0.5f, 0.5f);
-                t_traceMarker.gameObject.SetActive(true);
-
-                Color color = Color.blue;
-                if (tracking)
-                {
-                    if (trueBoneDistance >= range)
-                    {
-                        color = Color.red;
-                    }
-                    else
-                    {
-                        color = Color.green;
-                    }
-                }
-
-                mat_bone.SetColor("_WireColor", color);
-            }
-            else
-            {
+                // Invalid selection
                 t_boneModelRoot.gameObject.SetActive(false);
                 t_traceMarker.gameObject.SetActive(false);
-            }
-        }
 
-        void UpdateHeld()
-        {
-            VRCPlayerApi player = UpdateTrackingPlayer();
-            if (player == null)
-            {
-                // No candidate players in range, disable display
-                t_boneModelRoot.gameObject.SetActive(false);
-                t_traceMarker.gameObject.SetActive(false);
                 return;
             }
 
+            Vector3 boneLengthVec = boneHeap._a_GetBoneLengthVector(targetPlayerId, targetBoneId);
+
+            // Distance is needed to show out-of-range warning
+            t_boneModelRoot.position = singleBonePos;
+
+            Vector3 traceTarget = singleBonePos;
+
+            if (boneLengthVec.sqrMagnitude == 0) // yes this is float equality comparison, I know what I'm doing (usually)
+            {
+                t_boneModelRoot.localScale = new Vector3(0.1f, 0.1f, 0.1f);
+                t_boneModelRoot.rotation = Quaternion.identity;
+                obj_boneModelBody.SetActive(false);
+            }
+            else
+            {
+                boneLengthVec = singleBoneRot * boneLengthVec;
+                t_boneModelRoot.localScale = Vector3.one * boneLengthVec.magnitude;
+                t_boneModelRoot.rotation = Quaternion.LookRotation(boneLengthVec);
+                obj_boneModelBody.SetActive(true);
+
+                traceTarget += boneLengthVec * 0.5f;
+            }
+
+            t_boneModelRoot.gameObject.SetActive(true);
+
+            Vector3 traceSource = t_attachmentDirection.position;
+            t_traceMarker.position = traceSource;
+            t_traceMarker.rotation = Quaternion.LookRotation(traceTarget - traceSource);
+            t_traceMarker.localScale =
+                transform.lossyScale.magnitude * Vector3.Distance(traceSource, traceTarget) * new Vector3(0.5f, 0.5f, 0.5f);
+            t_traceMarker.gameObject.SetActive(true);
+
+            Color color = Color.blue;
+            if (tracking)
+            {
+                if (trueBoneDistance >= range)
+                {
+                    color = Color.red;
+                }
+                else
+                {
+                    color = Color.green;
+                }
+            }
+
+            mat_bone.SetColor("_WireColor", color);
+        }
+
+        int noValidBoneFrames = 0;
+
+        void UpdateHeld()
+        {
             CheckInput();
 
             // If we've held the trigger for long enough, release tracking
@@ -842,102 +700,93 @@ namespace net.fushizen.attachable {
                 tracking = false;
             }
 
-            if (!LoadBoneData(player)) return;
-
-            // If locked, check if current bone is a valid target.
-            var boneValid = tracking;
-            var dtb = DistanceToBone(player, targetBoneId);
-            boneValid = boneValid && dtb;
-
-            bool needScan = !boneValid || boneDistance > closestBoneDistance * secondaryCandidateMult;
-
-            if (needScan)
+            if (lastBoneAdvance >= 0 && lastBoneAdvance + 5.0f < Time.timeSinceLevelLoad)
             {
-                var oldDistance = boneDistance;
+                Debug.Log("=== Timeout: Reset bone blocklist");
+                lastBoneAdvance = -1;
+                finalBoneId = finalPlayerId = -1;
+                boneHeap._a_ClearBlocklist();
+            }
 
-                BoneScan(player);
-                int priorId = targetBoneId;
-                var bestBone = prefBoneLength > 0 ? prefBoneIds[0] : -1;
+            // Perform a bone update step
+            ScanNextPlayer();
 
-                // closestBoneDistance might have been outdated, check whether we still want to switch bones now
-                if (!boneValid || oldDistance > closestBoneDistance * secondaryCandidateMult || bestBone == -1)
+            // Reset blocklist if we've gone too far without a valid bone
+            if (boneHeap._a_ValidBones() == 0)
+            {
+                noValidBoneFrames++;
+                if (noValidBoneFrames > VRCPlayerApi.GetPlayerCount())
                 {
-                    targetBoneId = bestBone;
-
-                    // Stop tracking, since we're forcing a bone change
-                    tracking = false;
+                    boneHeap._a_ClearBlocklist();
+                    noValidBoneFrames = -999999;
                 }
+            } else
+            {
+                noValidBoneFrames = 0;
+            }
+            
+            // If locked, check if current bone is a valid target.
 
-                if (prefBoneLength == 0)
+            if (tracking)
+            {
+                float boneDistance = boneHeap._a_GetBoneDistance(targetPlayerId, targetBoneId);
+                if (boneDistance < 0)
                 {
-                    // There were no candidate bones on this player, try the next.
-                    targetPlayerId = FindPlayer();
+                    Debug.Log($"UpdateHeld: Terminating tracking due to invalid target");
+                    tracking = false;
                 }
             }
 
-            DisplayBoneModel(player);
+            if (!tracking)
+            {
+                targetBoneId = boneHeap.bestBoneId;
+                targetPlayerId = boneHeap.bestPlayerId;
+            }
+
+            DisplayBoneModel();
         }
 
         /* BoneScan(player); */
+        int finalPlayerId = -1;
+        int finalBoneId = -1;
+
         void NextBone()
         {
-            var player = VRCPlayerApi.GetPlayerById(targetPlayerId);
-            if (!Utilities.IsValid(player))
+            if (targetBoneId == -1) return;
+
+            lastBoneAdvance = Time.timeSinceLevelLoad;
+
+            Debug.Log($"NextBone: Forbid {targetBoneId}/{targetPlayerId}");
+            boneHeap._a_ForbidBone(targetPlayerId, targetBoneId);
+            if (finalPlayerId != -1 && finalBoneId != -1 && boneHeap._a_GetBoneTrueDistance(finalPlayerId, finalBoneId) >= 0)
             {
-                // reset scan
-                targetPlayerId = -1;
-                targetBoneId = -1;
-                return;
+                // We have the last bone left over from the prior scan, select and forbid it
+                Debug.Log($"Change target bone from {targetBoneId} to final {finalBoneId}, remaining {boneHeap._a_ValidBones()}");
+                targetPlayerId = finalPlayerId;
+                targetBoneId = finalBoneId;
+            } else if (boneHeap.bestBoneId != -1)
+            {
+                Debug.Log($"Change target bone from {targetBoneId} to best {boneHeap.bestBoneId}, remaining {boneHeap._a_ValidBones()}");
+                targetPlayerId = boneHeap.bestPlayerId;
+                targetBoneId = boneHeap.bestBoneId;
             }
 
-            if (lastBoneAdvance + 5.0f < Time.timeSinceLevelLoad)
+            if (boneHeap._a_ValidBones() < 2)
             {
-                // Perform new scan
-                BoneScan(player);
+                // Clear blocklist and let new candidates load while the player decides whether to pull the trigger again
+                Debug.Log($"End of cycle: Clear blocklist (final={boneHeap.bestBoneId})");
 
-                if (prefBoneLength < 1)
-                {
-                    tracking = false;
-                    targetBoneId = -1;
-                }
-                else
-                {
-                    targetBoneId = prefBoneIds[0];
-                }
+                finalBoneId = boneHeap.bestBoneId;
+                finalPlayerId = boneHeap.bestPlayerId;
 
-                return;
+                boneHeap._a_ClearBlocklist();
             }
 
-            while (prefBoneLength > 1)
+            if (targetPlayerId == -1)
             {
-                // Find next bone
-                if (HeapPop() > -1)
-                {
-                    targetBoneId = prefBoneIds[0];
-                }
-                else
-                {
-                    break;
-                }
-
-                // Check that bone is in range
-                if (!ComputeBonePosition(targetBoneId))
-                {
-                    continue;
-                }
-
-                if (trueBoneDistance >= range)
-                {
-                    continue;
-                }
-
-                // Ok, accept this candidate.
-                return;
+                Debug.Log("=== Terminating tracking: No targets");
+                tracking = false;
             }
-
-            // Restart scan on next update frame
-            targetBoneId = -1;
-            tracking = false;
         }
 
         void _a_OnTriggerChanged(bool boneSelectTrigger, bool prior)
@@ -969,13 +818,14 @@ namespace net.fushizen.attachable {
                 tracking = false;
                 targetBoneId = -1;
 
-                // Change tracking player
-                if (targetPlayerId < 0) return;
+                boneHeap._a_ForbidPlayer(targetPlayerId);
 
-                onHold._a_OnPlayerSelect();
+                if (boneHeap._a_ValidBones() == 0)
+                {
+                    boneHeap._a_ClearBlocklist();
+                }
 
-                targetPlayerId = FindPlayer();
-
+                targetPlayerId = -1;
             }
         }
 
