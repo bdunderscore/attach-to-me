@@ -114,6 +114,11 @@ namespace net.fushizen.attachable {
         /// <summary>
         /// Time (since level load) of the last time we dropped a pickup.
         /// </summary>
+        float lastDrop;
+
+        /// <summary>
+        /// Time (since level load) of the last time we picked up a pickup.
+        /// </summary>
         float lastPickup;
 
         /// <summary>
@@ -376,7 +381,7 @@ namespace net.fushizen.attachable {
                     tracking = true;
                 }
 
-                if (!tracking || !sameAsLast || lastPickup <= Time.timeSinceLevelLoad + RETAIN_CYCLE_TIME)
+                if (!tracking || !sameAsLast || lastDrop <= Time.timeSinceLevelLoad + RETAIN_CYCLE_TIME)
                 {
                     // Enable tracking, but restart the bone selection cycle.
                     var player = VRCPlayerApi.GetPlayerById(targetPlayerId);
@@ -387,6 +392,7 @@ namespace net.fushizen.attachable {
             }
 
             // Suppress the desktop trigger-press-on-pickup
+            lastPickup = Time.timeSinceLevelLoad;
             triggerDownTime = -1;
             lastBoneAdvance = Time.timeSinceLevelLoad;
 
@@ -413,8 +419,17 @@ namespace net.fushizen.attachable {
                 // Confirm that the tracking target is valid.
                 var player = VRCPlayerApi.GetPlayerById(targetPlayerId);
 
-                tracking = Utilities.IsValid(player) && player != null
-                    && DistanceToBone(player, targetBoneId) && trueBoneDistance < range;
+                if (Utilities.IsValid(player) && player != null)
+                {
+                    var trueDist = boneHeap._a_GetBoneTrueDistance(targetPlayerId, targetBoneId);
+                    if (trueDist < 0 || trueDist > range)
+                    {
+                        tracking = false;
+                    }
+                } else
+                {
+                    tracking = false;
+                }
             }
 
             if (!tracking)
@@ -430,7 +445,7 @@ namespace net.fushizen.attachable {
             t_traceMarker.gameObject.SetActive(false);
 
             lastAttachable = activeAttachable;
-            lastPickup = Time.timeSinceLevelLoad;
+            lastDrop = Time.timeSinceLevelLoad;
             activeAttachable = null;
             enabled = false;
 
@@ -583,10 +598,12 @@ namespace net.fushizen.attachable {
                 }
             }
 
+            var targetIndex = (targetPlayerId == player.playerId) ? targetBoneId : -1;
+
             for (int i = 0; i < nBones; i++)
             {
                 boneDistance = 999;
-                bool success = DistanceToBone(player, i) && trueBoneDistance <= range;
+                bool success = DistanceToBone(player, i) && (trueBoneDistance <= range || i == targetIndex);
 
                 if (!success)
                 {
@@ -606,9 +623,11 @@ namespace net.fushizen.attachable {
                 }
             }
 
+
             for (int i = 0; i < nBones; i++)
             {
-                if (distanceBuffer[i] > bestPrefDist * secondaryCandidateMult)
+                // Always record whatever our current target is, so that we have good data to use for (red) bone model display.
+                if (distanceBuffer[i] > bestPrefDist * secondaryCandidateMult && targetIndex != i)
                 {
                     distanceBuffer[i] = -1;
                 } else
@@ -631,11 +650,12 @@ namespace net.fushizen.attachable {
         {
             float trueBoneDistance = boneHeap._a_GetBoneTrueDistance(targetPlayerId, targetBoneId);
 
-            if (trueBoneDistance < 0 || !LoadSingleBoneData(VRCPlayerApi.GetPlayerById(targetPlayerId), targetBoneId))
+            if (!LoadSingleBoneData(VRCPlayerApi.GetPlayerById(targetPlayerId), targetBoneId))
             {
                 // Invalid selection
                 t_boneModelRoot.gameObject.SetActive(false);
                 t_traceMarker.gameObject.SetActive(false);
+                tracking = false;
 
                 return;
             }
@@ -647,7 +667,8 @@ namespace net.fushizen.attachable {
 
             Vector3 traceTarget = singleBonePos;
 
-            if (boneLengthVec.sqrMagnitude == 0) // yes this is float equality comparison, I know what I'm doing (usually)
+            // yes this is float equality comparison, I know what I'm doing (usually)
+            if (boneLengthVec.sqrMagnitude == 0)
             {
                 t_boneModelRoot.localScale = new Vector3(0.1f, 0.1f, 0.1f);
                 t_boneModelRoot.rotation = Quaternion.identity;
@@ -675,7 +696,7 @@ namespace net.fushizen.attachable {
             Color color = Color.blue;
             if (tracking)
             {
-                if (trueBoneDistance >= range)
+                if (trueBoneDistance >= range || trueBoneDistance < 0)
                 {
                     color = Color.red;
                 }
@@ -724,18 +745,6 @@ namespace net.fushizen.attachable {
             {
                 noValidBoneFrames = 0;
             }
-            
-            // If locked, check if current bone is a valid target.
-
-            if (tracking)
-            {
-                float boneDistance = boneHeap._a_GetBoneDistance(targetPlayerId, targetBoneId);
-                if (boneDistance < 0)
-                {
-                    Debug.Log($"UpdateHeld: Terminating tracking due to invalid target");
-                    tracking = false;
-                }
-            }
 
             if (!tracking)
             {
@@ -744,6 +753,7 @@ namespace net.fushizen.attachable {
             }
 
             DisplayBoneModel();
+
         }
 
         /* BoneScan(player); */
@@ -792,6 +802,7 @@ namespace net.fushizen.attachable {
         void _a_OnTriggerChanged(bool boneSelectTrigger, bool prior)
         {
             if (prior) return; // only trigger on false -> true transition
+            if (lastPickup + 0.25f > Time.timeSinceLevelLoad) return; // suppress input for a moment
 
             if (boneSelectTrigger)
             {
@@ -838,7 +849,7 @@ namespace net.fushizen.attachable {
             bool heldInLeft = currentHand == VRC_Pickup.PickupHand.Left;
             bool sameHand = heldInLeft == (args.handType == HandType.LEFT);
 
-            if (lastPickup + 0.25f > Time.timeSinceLevelLoad) return;
+            if (lastDrop + 0.25f > Time.timeSinceLevelLoad) return;
 
             if (activeAttachable != null && wasHeld[index] != value)
             {
