@@ -37,7 +37,6 @@ namespace net.fushizen.attachable
 
         public Transform t_pickup;
         public Transform t_attachmentDirection;
-        public AttachablesGlobalTracking globalTracking;
 
         public float range = 0.5f;
         [Range(0,1)]
@@ -69,6 +68,12 @@ namespace net.fushizen.attachable
         #endregion
 
         #region Support object references
+
+        /// <summary>
+        /// Reference to the GlobalTracking component on the controller prefab.
+        /// Initialized automagically by spooky action-at-a-distance.
+        /// </summary>
+        AttachablesGlobalTracking globalTracking;
 
         /// PickupProxy object on the pickup
         AttachableInternalPickupProxy proxy;
@@ -178,6 +183,16 @@ namespace net.fushizen.attachable
 
         void SetupReferences()
         {
+            var gtPath = Networking.LocalPlayer.GetPlayerTag("net.fushizen.attachable.GlobalTrackingPath");
+
+            if (gtPath == null)
+            {
+                Debug.LogError("Attachable: Global tracking object was not found.");
+            } else
+            {
+                globalTracking = GameObject.Find(gtPath).GetComponent<AttachablesGlobalTracking>();
+            }
+
             proxy = t_pickup.GetComponent<AttachableInternalPickupProxy>();
             proxy._a_SetController(this);
             pickup = (VRC_Pickup) t_pickup.GetComponent(typeof(VRC_Pickup));

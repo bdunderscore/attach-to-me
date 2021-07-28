@@ -283,9 +283,12 @@ namespace net.fushizen.attachable
         }
 
         readonly static string GLOBAL_TRACKING_PREFAB_GUID = "ad542b70c3bbcb14eaf2cf1120ea0422";
+        static GameObject locatedGlobalTrackingPrefab;
 
-        internal static AttachablesGlobalTracking FindGlobalTrackingObject(Scene scene)
+        internal static GameObject FindGlobalTrackingObject(Scene scene)
         {
+            if (locatedGlobalTrackingPrefab != null && locatedGlobalTrackingPrefab.scene == scene) return locatedGlobalTrackingPrefab;
+
             var wantedSource = UdonSharpEditorUtility.GetUdonSharpProgramAsset(typeof(AttachablesGlobalTracking));
 
             foreach (var root in scene.GetRootGameObjects())
@@ -295,7 +298,8 @@ namespace net.fushizen.attachable
                     var source = behaviour.programSource;
                     if (source == wantedSource)
                     {
-                        return (AttachablesGlobalTracking)UdonSharpEditorUtility.GetProxyBehaviour(behaviour);
+                        locatedGlobalTrackingPrefab = behaviour.gameObject;
+                        return locatedGlobalTrackingPrefab;
                     }
                 }
             }
@@ -305,31 +309,21 @@ namespace net.fushizen.attachable
 
         internal static void CheckGlobalTrackingReference(Attachable target)
         {
-            if (target.globalTracking == null)
-            {
-                // Find an existing globaltracking object, if any
-                var existingTrackingObject = FindGlobalTrackingObject(target.gameObject.scene);
-                if (existingTrackingObject != null) {
-                    target.globalTracking = existingTrackingObject;
-                    UdonSharpEditorUtility.CopyProxyToUdon(target);
-                    EditorUtility.SetDirty(target);
-                    return;
-                }
-
-                // Create a global tracking object, since it doesn't exist
-                var path = AssetDatabase.GUIDToAssetPath(GLOBAL_TRACKING_PREFAB_GUID);
-                if (path == null) return;
-
-                var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
-                if (prefab == null) return;
-
-                var instance = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
-                Undo.RegisterCreatedObjectUndo(instance, "Created global tracking prefab");
-
-                target.globalTracking = instance.GetUdonSharpComponent<AttachablesGlobalTracking>();
-                UdonSharpEditorUtility.CopyProxyToUdon(target);
-                EditorUtility.SetDirty(target);
+            // Find an existing globaltracking object, if any
+            var existingTrackingObject = FindGlobalTrackingObject(target.gameObject.scene);
+            if (existingTrackingObject != null) {
+                return;
             }
+
+            // Create a global tracking object, since it doesn't exist
+            var path = AssetDatabase.GUIDToAssetPath(GLOBAL_TRACKING_PREFAB_GUID);
+            if (path == null) return;
+
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            if (prefab == null) return;
+
+            var instance = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+            Undo.RegisterCreatedObjectUndo(instance, "Created global tracking prefab");
         }
 
         private void syncProp(ref bool anythingChanged, string name)
