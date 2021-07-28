@@ -196,7 +196,10 @@ namespace net.fushizen.attachable
 
             int selector = slot * boneCount + boneId;
 
-            HeapDelete(selector);
+            if (selector < selectorToBoneLength.Length)
+            {
+                HeapDelete(selector);
+            }
             BlockBone(selector);
 
             Debug.Log($"After forbidding selector {selector}, remaining count is {maxAllocatedElement} and best is {elementIds[0]}");
@@ -210,6 +213,7 @@ namespace net.fushizen.attachable
             if (slot < 0) return;
 
             int baseSelector = slot * boneCount;
+            EnsureCapacity(slot);
 
             for (int i = 0; i < boneCount; i++)
             {
@@ -390,9 +394,13 @@ namespace net.fushizen.attachable
                 for (int i = 0; i < boneCount; i++)
                 {
                     var selector = selectorBase + i;
-                    HeapDelete(selector);
 
-                    if (selector <= boneIsFiltered.Length)
+                    if (selector < selectorToHeapIndex.Length)
+                    {
+                        HeapDelete(selector);
+                    }
+
+                    if (selector < boneIsFiltered.Length)
                     {
                         boneIsFiltered[selector] = false;
                     }
