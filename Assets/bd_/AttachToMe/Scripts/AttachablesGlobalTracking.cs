@@ -37,11 +37,8 @@ namespace net.fushizen.attachable
         int nextFreeSlot = 0;
         float pickupsEnabledUntil;
 
-        int nextEvalSlot;
-
+        int nextRegistrationSlot;
         int nextTrackingSlot;
-
-        int nextTrackingFrame;
 
         bool altWasHeld;
         float lastAltPress;
@@ -59,6 +56,8 @@ namespace net.fushizen.attachable
             attachables = new Attachable[16];
             trackingAttachables = new Attachable[16];
         }
+
+        #region Registration logic
 
         Attachable[] ResizeArray(Attachable[] oldArray, int newSize)
         {
@@ -89,27 +88,99 @@ namespace net.fushizen.attachable
 
         public void _a_EnableTracking(Attachable a)
         {
-            if (a._tracking_index >= 0) return;
+            if (System.Array.IndexOf(trackingAttachables, a) >= 0) return;
 
-            a._tracking_index = nextTrackingSlot;
-            trackingAttachables[nextTrackingSlot++] = a;
+            // Restore the invariant that the array is ordered from child to parent.
+            // We do this by walking up the heirarchy to find any tracking parent, and then place this object
+            // immediately before it. Any sub-children must have already been before the parent, so they will
+            // remain before this intermediate object as well.
+
+            var parent = a.t_pickup.parent;
+
+            int insertionIndex = nextTrackingSlot;
+            while (parent != null)
+            {
+                // initial filtering step to avoid calling an expensive U#-emulated GetComponent on things that
+                // aren't even pickups
+                if (parent.GetComponent(typeof(VRC_Pickup)) == null)
+                {
+                    parent = parent.parent;
+                    continue;
+                }
+
+                var proxy = parent.GetComponent<AttachableInternalPickupProxy>();
+                if (proxy != null)
+                {
+                    var controller = proxy._attachable;
+
+                    if (controller != null)
+                    {
+                        var idx = System.Array.IndexOf(trackingAttachables, controller);
+                        if (idx >= 0)
+                        {
+                            insertionIndex = idx;
+                            break;
+                        }
+                    }
+                }
+
+                parent = parent.parent;
+            }
+
+            System.Array.Copy(trackingAttachables, insertionIndex, trackingAttachables, insertionIndex + 1, nextTrackingSlot - insertionIndex);
+            trackingAttachables[insertionIndex] = a;
+            nextTrackingSlot++;
         }
 
         public void _a_DisableTracking(Attachable a)
         {
-            int idx = a._tracking_index;
+            int idx = System.Array.IndexOf(trackingAttachables, a);
             if (idx < 0) return;
-            a._tracking_index = -1;
+
+            System.Array.Copy(trackingAttachables, idx + 1, trackingAttachables, idx, nextTrackingSlot - (idx + 1));
 
             nextTrackingSlot--;
-            if (idx != nextTrackingSlot)
-            {
-                var other = trackingAttachables[nextTrackingSlot];
-                trackingAttachables[idx] = other;
-                other._tracking_index = idx;
-            }
             trackingAttachables[nextTrackingSlot] = null;
         }
+
+        #endregion
+
+        #region Heap maintenance
+
+        void HeapSwap(int a, int b)
+        {
+            var n_b = trackingAttachables[a];
+            var n_a = trackingAttachables[b];
+
+            trackingAttachables[a] = n_a;
+            trackingAttachables[b] = n_b;
+
+            n_a._tracking_index = a;
+            n_b._tracking_index = b;
+        }
+
+        #endregion
+
+        #region Render trigger
+
+        public override void PostLateUpdate()
+        {
+            //Debug.Log("=== PostLateUpdate()");
+            for (int i = nextTrackingSlot - 1; i >= 0; i--)
+            {
+                var node = trackingAttachables[i];
+                if (node != null)
+                {
+                    ///Debug.Log($"=== Updating {i}: {node.gameObject.name} ({node._depth})");
+                    node._a_UpdateTracking();
+                }
+            }
+            //Debug.Log("=== End PostLateUpdate()");
+        }
+
+        #endregion
+
+        #region Bone reader respawn logic
 
         public void _a_RespawnBoneReader()
         {
@@ -138,6 +209,9 @@ namespace net.fushizen.attachable
             }
         }
 
+        #endregion
+
+        #region Input handling
 
         public override void InputLookVertical(float value, UdonInputEventArgs args)
         {
@@ -148,7 +222,7 @@ namespace net.fushizen.attachable
             if (!Networking.LocalPlayer.IsUserInVR()) return;
 
             pickupsEnabledUntil = Time.timeSinceLevelLoad + PICKUP_TIMEOUT;
-            if (!cur_enabled) nextEvalSlot = 0;
+            if (!cur_enabled) nextRegistrationSlot = 0;
 
             cur_enabled = true;
         }
@@ -190,27 +264,29 @@ namespace net.fushizen.attachable
             if (enablePickup)
             {
                 pickupsEnabledUntil = Time.timeSinceLevelLoad + PICKUP_TIMEOUT;
-                if (!cur_enabled) nextEvalSlot = 0;
+                if (!cur_enabled) nextRegistrationSlot = 0;
 
                 cur_enabled = true;
             }
 
             if (cur_enabled && pickupsEnabledUntil < Time.timeSinceLevelLoad)
             {
-                nextEvalSlot = 0;
+                nextRegistrationSlot = 0;
                 cur_enabled = false;
             }
 
-            if (nextEvalSlot < nextFreeSlot)
+            if (nextRegistrationSlot < nextFreeSlot)
             {
-                int limit = nextEvalSlot + 16;
+                int limit = nextRegistrationSlot + 16;
                 if (limit > nextFreeSlot) limit = nextFreeSlot;
 
-                for (; nextEvalSlot < limit; nextEvalSlot++)
+                for (; nextRegistrationSlot < limit; nextRegistrationSlot++)
                 {
-                    attachables[nextEvalSlot]._a_SetPickupEnabled(cur_enabled);
+                    attachables[nextRegistrationSlot]._a_SetPickupEnabled(cur_enabled);
                 }
             }
         }
+
+        #endregion
     }
 }

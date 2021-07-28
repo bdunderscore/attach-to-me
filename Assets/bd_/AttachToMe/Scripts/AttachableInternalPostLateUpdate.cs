@@ -25,21 +25,9 @@ using UnityEditor;
 
 namespace net.fushizen.attachable
 {
-
-    [UdonBehaviourSyncMode(BehaviourSyncMode.Manual)]
-    [DefaultExecutionOrder(1)]
     public class AttachableInternalPostLateUpdate : UdonSharpBehaviour
     {
-        Attachable a;
-        void Start()
-        {
-            a = GetComponent<Attachable>();
-        }
-
-        public override void PostLateUpdate()
-        {
-            a._a_UpdateTracking();
-        }
+        // Unused, but left in to facilitate upgrades
     }
 
 
@@ -50,7 +38,7 @@ namespace net.fushizen.attachable
     {
         public override void OnInspectorGUI()
         {
-            EditorGUILayout.LabelField("Attachables internal component (PostLateUpdate)");
+            EditorGUILayout.LabelField("This component is obsolete.");
         }
     }
 

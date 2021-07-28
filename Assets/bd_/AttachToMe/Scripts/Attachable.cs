@@ -42,7 +42,6 @@ namespace net.fushizen.attachable
         [Range(0,1)]
         public float directionality = 0.5f;
         public bool preferSelf = true;
-        public bool trackOnUpdate = false;
         public bool disableFingerSelection = false;
 
         public bool perm_removeTracee = true;
@@ -61,6 +60,9 @@ namespace net.fushizen.attachable
 
         [HideInInspector]
         public int _tracking_index = -1;
+
+        [HideInInspector]
+        public int _depth = -1;
 
         private float globalTrackingScale;
         private AttachablesGlobalOnHold onHold;
@@ -96,11 +98,6 @@ namespace net.fushizen.attachable
 
         /// Disablable update loop component
         AttachableInternalUpdateLoop updateLoop;
-
-        /// <summary>
-        ///  Disablable post-late-update loop component
-        /// </summary>
-        AttachableInternalPostLateUpdate postLateUpdateLoop;
 
         #endregion
 
@@ -205,12 +202,19 @@ namespace net.fushizen.attachable
             globalTrackingScale = t_support.localScale.x;
 
             updateLoop = GetComponent<AttachableInternalUpdateLoop>();
-            postLateUpdateLoop = GetComponent<AttachableInternalPostLateUpdate>();
         }
 
         void Start()
         {
             SetupReferences();
+
+            _depth = 0;
+            var p = transform.parent;
+            while (p != null)
+            {
+                _depth++;
+                p = p.parent;
+            }
 
             globalTracking._a_Register(this);
 
@@ -221,7 +225,6 @@ namespace net.fushizen.attachable
             ClearTracking();
 
             updateLoop.enabled = false;
-            postLateUpdateLoop.enabled = false;
 
             sync_pos = t_pickup.localPosition;
             sync_rot = t_pickup.localRotation;
@@ -428,8 +431,7 @@ namespace net.fushizen.attachable
                 globalTracking._a_DisableTracking(this);
             }
 
-            updateLoop.enabled = isHeldLocally || (tracking && trackOnUpdate);
-            postLateUpdateLoop.enabled = tracking && !trackOnUpdate;
+            updateLoop.enabled = isHeldLocally;
 
             if (Networking.IsOwner(gameObject))
             {

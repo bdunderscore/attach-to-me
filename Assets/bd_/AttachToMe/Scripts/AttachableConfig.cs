@@ -103,13 +103,17 @@ namespace net.fushizen.attachable
         {
             CheckReference(transform, ref attachable, typeof(Attachable));
             CheckReference(transform, ref updateLoop, typeof(AttachableInternalUpdateLoop));
-            CheckReference(transform, ref postLateUpdateLoop, typeof(AttachableInternalPostLateUpdate));
             CheckReference(t_pickup, ref pickupProxy, typeof(AttachableInternalPickupProxy));
 
             attachable.enabled = true;
             updateLoop.enabled = false;
-            postLateUpdateLoop.enabled = false;
             pickupProxy.enabled = true;
+
+            // Upgrade: Remove references to the postLateUpdateLoop
+            if (postLateUpdateLoop != null)
+            {
+                DestroyImmediate(postLateUpdateLoop);
+            }
         }
 
         private void CheckReference(Transform refObject, ref UdonBehaviour udon, Type udonSharpClass)
@@ -259,6 +263,11 @@ namespace net.fushizen.attachable
 
             syncProp(ref anythingChanged, nameof(respawnTime));
 
+            if (anythingChanged)
+            {
+                EditorUtility.SetDirty(attachable);
+            }
+
             if (!PrefabUtility.IsPartOfPrefabInstance(this) && !EditorApplication.isPlayingOrWillChangePlaymode)
             {
                 CheckGlobalTrackingReference(attachable);
@@ -279,7 +288,6 @@ namespace net.fushizen.attachable
                     curObjectSync = t_pickup.gameObject.AddComponent<VRCObjectSync>();
                 }
             }
-            
         }
 
         readonly static string GLOBAL_TRACKING_PREFAB_GUID = "ad542b70c3bbcb14eaf2cf1120ea0422";

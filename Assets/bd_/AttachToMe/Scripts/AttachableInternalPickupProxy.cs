@@ -25,7 +25,8 @@ namespace net.fushizen.attachable
     [DefaultExecutionOrder(1)]
     public class AttachableInternalPickupProxy : UdonSharpBehaviour
     {
-        Attachable a;
+        [HideInInspector]
+        public Attachable _attachable;
 
         void Start()
         {
@@ -34,22 +35,22 @@ namespace net.fushizen.attachable
 
         public void _a_SetController(Attachable a)
         {
-            this.a = a;
+            this._attachable = a;
         }
 
         public override void OnDrop()
         {
-            a._a_OnDrop();
+            _attachable._a_OnDrop();
         }
 
         public override void OnPickup()
         {
-            a._a_OnPickup();
+            _attachable._a_OnPickup();
         }
 
         public override void OnOwnershipTransferred(VRCPlayerApi player)
         {
-            Networking.SetOwner(player, a.gameObject);
+            Networking.SetOwner(player, _attachable.gameObject);
         }
     }
 }
