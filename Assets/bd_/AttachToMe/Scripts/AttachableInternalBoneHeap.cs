@@ -225,6 +225,26 @@ namespace net.fushizen.attachable
             UpdateBestResult();
         }
 
+        public void _a_ClearPlayer(VRCPlayerApi player)
+        {
+            int slot = PlayerIdToSlot(player.playerId);
+            if (slot < 0) return;
+
+            int baseSelector = slot * boneCount;
+            EnsureCapacity(slot);
+
+            for (int i = 0; i < boneCount; i++)
+            {
+                int selector = baseSelector + i;
+                HeapDelete(selector);
+
+                if (selector < boneIsFiltered.Length)
+                {
+                    boneIsFiltered[selector] = false;
+                }
+            }
+        }
+
         public float _a_GetBoneDistance(int playerId, int boneId)
         {
             int slot = PlayerIdToSlot(playerId);

@@ -537,6 +537,11 @@ namespace net.fushizen.attachable {
         VRCPlayerApi[] boneScanPlayers;
         int nextBoneScanPlayerIndex, boneScanPlayerCount;
 
+        /// <summary>
+        /// This player tag has a nonzero length string if the associated player has data in the bone heap.
+        /// </summary>
+        readonly string HAS_DATA_FLAG = "net.fushizen.attachable.AttachableBoneSelection.PlayerHasHeapData";
+
         void ScanNextPlayer()
         {
             //var sw = new System.Diagnostics.Stopwatch();
@@ -549,34 +554,40 @@ namespace net.fushizen.attachable {
             float maxDistance = range + PLAYER_LEEWAY;
             var pos = t_attachmentDirection.position;
 
-            while (nextBoneScanPlayerIndex < boneScanPlayerCount
-                && (!Utilities.IsValid(boneScanPlayers[nextBoneScanPlayerIndex])
-                    || Vector3.Distance(boneScanPlayers[nextBoneScanPlayerIndex].GetPosition(), pos) > maxDistance)
-            )
-            {
-                nextBoneScanPlayerIndex++;
-            }
-
-            if (nextBoneScanPlayerIndex == boneScanPlayerCount)
-            {
-                boneScanPlayerCount = VRCPlayerApi.GetPlayerCount();
-                if (boneScanPlayers.Length < boneScanPlayerCount)
-                {
-                    boneScanPlayers = new VRCPlayerApi[boneScanPlayerCount];
-                }
-                boneScanPlayers = VRCPlayerApi.GetPlayers(boneScanPlayers);
-                nextBoneScanPlayerIndex = 0;
-                return;
-            } else
+            while (nextBoneScanPlayerIndex < boneScanPlayerCount)
             {
                 player = boneScanPlayers[nextBoneScanPlayerIndex++];
+                if (!Utilities.IsValid(player)) continue;
+                if (Vector3.Distance(player.GetPosition(), pos) <= maxDistance)
+                {
+                    BoneScan(player);
+                    return;
+                } else {
+                    var tag = player.GetPlayerTag(HAS_DATA_FLAG);
+                    if (tag != null && tag.Length > 0)
+                    {
+                        boneHeap._a_ClearPlayer(player);
+                        player.SetPlayerTag(HAS_DATA_FLAG, "");
+                        // This was an expensive call, so continue on the next frame
+                        return;
+                    }
+                }
             }
 
-            BoneScan(player);
+            // Restart scan on the next frame
+            boneScanPlayerCount = VRCPlayerApi.GetPlayerCount();
+            if (boneScanPlayers.Length < boneScanPlayerCount)
+            {
+                boneScanPlayers = new VRCPlayerApi[boneScanPlayerCount];
+            }
+            boneScanPlayers = VRCPlayerApi.GetPlayers(boneScanPlayers);
+            nextBoneScanPlayerIndex = 0;
         }
 
         void BoneScan(VRCPlayerApi player) {
-            LoadBoneData(player);
+            if (!LoadBoneData(player)) return;
+
+            player.SetPlayerTag(HAS_DATA_FLAG, "x");
 
             int nBones = bone_targets.Length;
             
@@ -748,6 +759,10 @@ namespace net.fushizen.attachable {
 
             if (!tracking)
             {
+                if (boneHeap.bestBoneId != targetBoneId)
+                {
+                    Debug.Log($"Changing targets from {targetBoneId} @ dist {boneHeap._a_GetBoneDistance(targetPlayerId, targetBoneId):F2} => {boneHeap.bestBoneId} @ dist {boneHeap._a_GetBoneDistance(boneHeap.bestBoneId, boneHeap.bestPlayerId)}");
+                }
                 targetBoneId = boneHeap.bestBoneId;
                 targetPlayerId = boneHeap.bestPlayerId;
             }
