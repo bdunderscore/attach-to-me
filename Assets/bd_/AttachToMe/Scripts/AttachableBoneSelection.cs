@@ -360,6 +360,11 @@ namespace net.fushizen.attachable {
 
             var sameAsLast = activeAttachable == lastAttachable;
 
+            if (!sameAsLast || lastDrop <= Time.timeSinceLevelLoad + RETAIN_CYCLE_TIME)
+            {
+                boneHeap._a_Reset();
+            }
+
             activeAttachable = attachable;
             currentHand = hand;
             enabled = true; // start update loop and input monitoring
@@ -717,7 +722,7 @@ namespace net.fushizen.attachable {
                 }
             }
 
-            mat_bone.SetColor("_WireColor", color);
+            mat_bone.SetColor("_Color", color);
         }
 
         int noValidBoneFrames = 0;
@@ -734,7 +739,6 @@ namespace net.fushizen.attachable {
 
             if (lastBoneAdvance >= 0 && lastBoneAdvance + 5.0f < Time.timeSinceLevelLoad)
             {
-                Debug.Log("=== Timeout: Reset bone blocklist");
                 lastBoneAdvance = -1;
                 finalBoneId = finalPlayerId = -1;
                 boneHeap._a_ClearBlocklist();
@@ -759,10 +763,6 @@ namespace net.fushizen.attachable {
 
             if (!tracking)
             {
-                if (boneHeap.bestBoneId != targetBoneId)
-                {
-                    Debug.Log($"Changing targets from {targetBoneId} @ dist {boneHeap._a_GetBoneDistance(targetPlayerId, targetBoneId):F2} => {boneHeap.bestBoneId} @ dist {boneHeap._a_GetBoneDistance(boneHeap.bestBoneId, boneHeap.bestPlayerId)}");
-                }
                 targetBoneId = boneHeap.bestBoneId;
                 targetPlayerId = boneHeap.bestPlayerId;
             }
@@ -781,17 +781,14 @@ namespace net.fushizen.attachable {
 
             lastBoneAdvance = Time.timeSinceLevelLoad;
 
-            Debug.Log($"NextBone: Forbid {targetBoneId}/{targetPlayerId}");
             boneHeap._a_ForbidBone(targetPlayerId, targetBoneId);
             if (finalPlayerId != -1 && finalBoneId != -1 && boneHeap._a_GetBoneTrueDistance(finalPlayerId, finalBoneId) >= 0)
             {
                 // We have the last bone left over from the prior scan, select and forbid it
-                Debug.Log($"Change target bone from {targetBoneId} to final {finalBoneId}, remaining {boneHeap._a_ValidBones()}");
                 targetPlayerId = finalPlayerId;
                 targetBoneId = finalBoneId;
             } else if (boneHeap.bestBoneId != -1)
             {
-                Debug.Log($"Change target bone from {targetBoneId} to best {boneHeap.bestBoneId}, remaining {boneHeap._a_ValidBones()}");
                 targetPlayerId = boneHeap.bestPlayerId;
                 targetBoneId = boneHeap.bestBoneId;
             }
@@ -799,8 +796,6 @@ namespace net.fushizen.attachable {
             if (boneHeap._a_ValidBones() < 2)
             {
                 // Clear blocklist and let new candidates load while the player decides whether to pull the trigger again
-                Debug.Log($"End of cycle: Clear blocklist (final={boneHeap.bestBoneId})");
-
                 finalBoneId = boneHeap.bestBoneId;
                 finalPlayerId = boneHeap.bestPlayerId;
 
@@ -809,7 +804,6 @@ namespace net.fushizen.attachable {
 
             if (targetPlayerId == -1)
             {
-                Debug.Log("=== Terminating tracking: No targets");
                 tracking = false;
             }
         }

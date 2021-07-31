@@ -11,6 +11,7 @@ ModelImporter:
     400004: Root
     2100000: No Name
     2100002: BoneBody
+    2100004: Sphere
     2300000: Bone
     2300002: Root
     3300000: Bone
@@ -22,12 +23,17 @@ ModelImporter:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
       name: BoneBody
-    second: {fileID: 2100000, guid: 08c5886c5ca4d514e889e29b5767e050, type: 2}
+    second: {fileID: 2100000, guid: 03420467fcb74ff43ac2ff550599062a, type: 2}
   - first:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
       name: No Name
     second: {fileID: 2100000, guid: 08c5886c5ca4d514e889e29b5767e050, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: Sphere
+    second: {fileID: 2100000, guid: ed52b386de2b5cd409592b04bacc0594, type: 2}
   materials:
     importMaterials: 1
     materialName: 0

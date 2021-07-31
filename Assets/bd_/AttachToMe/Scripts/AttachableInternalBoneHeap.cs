@@ -39,7 +39,7 @@ namespace net.fushizen.attachable
         }
 
         #region Public API
-
+        
         [HideInInspector]
         public int bestPlayerId, bestBoneId;
 
@@ -50,7 +50,7 @@ namespace net.fushizen.attachable
 
             bestBoneId = bestPlayerId = -1;
         }
-
+        
         public void _a_ClearBlocklist()
         {
             FilterReset();
@@ -465,7 +465,7 @@ namespace net.fushizen.attachable
         #endregion
 
         #region Heap operations 
-
+        
         int[] elementIds;
         float[] elementDistance;
         int maxAllocatedElement;
