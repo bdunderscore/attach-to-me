@@ -68,7 +68,7 @@ Shader "bd_/AttachToMe/TraceBeam"
 
                 o.worldYvec = normalize(mul(unity_ObjectToWorld, float4(0,1,0, 0)));
 
-                o.worldPosAndScale = mul(unity_ObjectToWorld, v.vertex);
+                o.worldPosAndScale = mul(unity_ObjectToWorld, float4(v.vertex.xyz, 0));
 
                 o.worldPosAndScale.w = max(
                     max(
