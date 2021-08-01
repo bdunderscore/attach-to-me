@@ -43,9 +43,22 @@ namespace net.fushizen.attachable
         public float directionality = 0.5f;
         public bool disableFingerSelection = false;
 
+        /// <summary>
+        /// Whether the person the prop is attached to can remove it.
+        /// </summary>
         public bool perm_removeTracee = true;
+        /// <summary>
+        /// Whether the player who attached the prop can remove it.
+        /// </summary>
         public bool perm_removeOwner = true;
+        /// <summary>
+        /// Whether anyone other than the above can remove it.
+        /// </summary>
         public bool perm_removeOther = true;
+        /// <summary>
+        /// Whether the prop can be removed when the player is alone.
+        /// </summary>
+        public bool perm_fallback = true;
 
         public Animator c_animator;
         public string anim_onTrack, anim_onHeld, anim_onTrackLocal, anim_onHeldLocal;
@@ -134,6 +147,12 @@ namespace net.fushizen.attachable
         /// </summary>
         [UdonSynced]
         int sync_scheduledRespawn;
+
+        /// <summary>
+        /// Display name of player who attached this object. Used for perm_removeOwner.
+        /// </summary>
+        [UdonSynced]
+        string sync_placedBy;
 
         // Last applied state sequence number (triggers lerping transition)
         int last_seqno;
@@ -456,6 +475,7 @@ namespace net.fushizen.attachable
             sync_targetPlayer = sync_targetBone = -1;
             sync_pos = t_pickup.localPosition;
             sync_rot = t_pickup.localRotation;
+            sync_placedBy = "";
 
             SetTrackingEnabled(false);
             _a_SetPickupPerms();
@@ -485,6 +505,7 @@ namespace net.fushizen.attachable
             var invRot = Quaternion.Inverse(boneRotation);
             sync_pos = invRot * (t_pickup.position - bonePosition);
             sync_rot = invRot * t_pickup.rotation;
+            sync_placedBy = Networking.LocalPlayer.displayName;
 
             sync_seqno++;
 
@@ -786,13 +807,13 @@ namespace net.fushizen.attachable
 
         public bool _a_HasPickupPermissions()
         {
-            if (sync_targetPlayer == -1 || VRCPlayerApi.GetPlayerCount() == 1)
+            if (sync_targetPlayer == -1 || (perm_fallback && VRCPlayerApi.GetPlayerCount() == 1))
             {
                 return true;
             } else
             {
                 bool isTarget = Networking.LocalPlayer.playerId == sync_targetPlayer;
-                bool isOwner = Networking.IsOwner(gameObject);
+                bool isOwner = Networking.LocalPlayer.displayName.Equals(sync_placedBy);
                 bool isOther = !(isTarget || isOwner);
 
                 return (perm_removeTracee && isTarget) || (perm_removeOwner && isOwner) || (perm_removeOther && isOther);

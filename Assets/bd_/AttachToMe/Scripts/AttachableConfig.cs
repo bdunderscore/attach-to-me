@@ -54,6 +54,7 @@ namespace net.fushizen.attachable
         public bool perm_removeTracee = true;
         public bool perm_removeOwner = true;
         public bool perm_removeOther = true;
+        public bool perm_fallback = true;
 
         public Animator c_animator;
         public string anim_onTrack, anim_onHeld, anim_onTrackLocal, anim_onHeldLocal;
@@ -232,6 +233,7 @@ namespace net.fushizen.attachable
             syncProp(ref anythingChanged, nameof(perm_removeOther));
             syncProp(ref anythingChanged, nameof(perm_removeOwner));
             syncProp(ref anythingChanged, nameof(perm_removeTracee));
+            syncProp(ref anythingChanged, nameof(perm_fallback));
 
             syncProp(ref anythingChanged, nameof(c_animator));
             syncProp(ref anythingChanged, nameof(anim_onHeld));
