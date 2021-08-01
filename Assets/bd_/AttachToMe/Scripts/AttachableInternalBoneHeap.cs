@@ -56,7 +56,7 @@ namespace net.fushizen.attachable
             FilterReset();
         }
 
-        public void _a_UpdateBatch(VRCPlayerApi player, float[] boneDistances, Vector3[] boneLengthVectors, float[] boneTrueDistances)
+        public void _a_UpdateBatch(VRCPlayerApi player, int startBone, int endBone, float[] boneDistances, Vector3[] boneLengthVectors, float[] boneTrueDistances)
         {
             int slot = PlayerToSlot(player);
             if (slot < 0)
@@ -71,10 +71,7 @@ namespace net.fushizen.attachable
 
             int nDel = 0, nIns = 0;
 
-            var currentBest = maxAllocatedElement > 0 ? elementIds[0] : -1;
-            var currentBestDist = maxAllocatedElement > 0 ? elementDistance[0] : -1;
-
-            for (int i = 0; i < count; i++)
+            for (int i = startBone; i < endBone; i++)
             {
                 int selector = startIndex + i;
                 var distance = boneDistances[i];
@@ -90,32 +87,11 @@ namespace net.fushizen.attachable
                 //CheckHeapIntegrity();
             }
 
-            System.Array.Copy(boneLengthVectors, 0, selectorToBoneLength, startIndex, boneLengthVectors.Length);
-            System.Array.Copy(boneTrueDistances, 0, selectorToBoneTrueDistance, startIndex, boneTrueDistances.Length);
+            int nBones = endBone - startBone;
+            System.Array.Copy(boneLengthVectors, startBone, selectorToBoneLength, startIndex + startBone, nBones);
+            System.Array.Copy(boneTrueDistances, startBone, selectorToBoneTrueDistance, startIndex + startBone, nBones);
 
             UpdateBestResult();
-
-            var newBest = maxAllocatedElement > 0 ? elementIds[0] : -1;
-            var newBestDist = maxAllocatedElement > 0 ? elementDistance[0] : -1;
-            /*
-            if (newBest != newBestDist)
-            {
-                var selIndex = currentBest >= 0 ? selectorToHeapIndex[currentBest] : -1;
-
-                Debug.LogWarning($"UpdateBatch: {currentBest}/{currentBestDist}/newPosition={selIndex - 1} => {newBest}{newBestDist}");
-
-                if (currentBest >= 0)
-                {
-                    if (selIndex <= 0)
-                    {
-                        Debug.LogWarning("$  => Prior best is not present");
-                    }
-                    else
-                    {
-                        Debug.LogWarning($"$  => Prior best: {elementDistance[selIndex - 1]}");
-                    }
-                }
-            }*/
         }
 
         void CheckHeapIntegrity()

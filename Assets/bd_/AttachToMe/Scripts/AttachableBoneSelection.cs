@@ -13,6 +13,15 @@ namespace net.fushizen.attachable {
     public class AttachableBoneSelection : UdonSharpBehaviour
     {
         /// <summary>
+        /// The number of bones to evaluate per frame.
+        /// </summary>
+#if UNITY_ANDROID
+        readonly int BONES_PER_FRAME = 6;
+#else
+        readonly int BONES_PER_FRAME = 12;
+#endif
+
+        /// <summary>
         /// Controls how many seconds to retain bone scan data after dropping.
         /// 
         /// If the same pickup is re-picked-up within this time, we'll continue the bone selection cycle where they
@@ -47,7 +56,7 @@ namespace net.fushizen.attachable {
             targetPlayerId = targetBoneId = -1;
         }
 
-        #region Global references
+#region Global references
 
         AttachableBoneData boneData;
         AttachablesGlobalOnHold onHold;
@@ -70,7 +79,7 @@ namespace net.fushizen.attachable {
         /// <summary>
         /// Material used to render the bone wireframes
         /// </summary>
-        private Material mat_bone;
+        private Material mat_bone, mat_sphere;
 
         void SetupReferences()
         {
@@ -82,8 +91,10 @@ namespace net.fushizen.attachable {
             t_traceMarker = transform.Find("TraceMarker");
             t_boneModelRoot = transform.Find("BoneMarkerRoot");
             obj_boneModelBody = t_boneModelRoot.Find("boneMarker/Bone").gameObject;
+            var t_boneModelSphere = t_boneModelRoot.Find("boneMarker/Root");
 
             mat_bone = obj_boneModelBody.transform.GetComponent<MeshRenderer>().sharedMaterial;
+            mat_sphere = t_boneModelSphere.GetComponent<MeshRenderer>().sharedMaterial;
         }
 
         public override void PostLateUpdate()
@@ -97,9 +108,9 @@ namespace net.fushizen.attachable {
             UpdateHeld();
         }
 
-        #endregion
+#endregion
 
-        #region Selection state
+#region Selection state
 
         /// <summary>
         /// The currently active attachable, or null if we're not selecting currently.
@@ -153,10 +164,10 @@ namespace net.fushizen.attachable {
         /// </summary>
         bool tracking;
 
-        #endregion
+#endregion
 
 
-        #region Bone data and distance computation
+#region Bone data and distance computation
         // Must match AttachableBoneData
         readonly int BONE_LEFT_UPPER_LEG = 1;
         readonly int BONE_RIGHT_UPPER_LEG = 2;
@@ -342,9 +353,9 @@ namespace net.fushizen.attachable {
             return true;
         }
 
-        #endregion
+#endregion
 
-        #region Initialization
+#region Initialization
 
         /// <summary>
         /// Attempts to start the bone selection process on pickup of the pickup.
@@ -392,7 +403,8 @@ namespace net.fushizen.attachable {
                     var player = VRCPlayerApi.GetPlayerById(targetPlayerId);
                     finalPlayerId = finalBoneId = -1;
 
-                    BoneScan(player);
+                    //Debug.Log("=== StartSelection: StartBoneScan");
+                    StartBoneScan(player);
                 }
             }
 
@@ -457,7 +469,7 @@ namespace net.fushizen.attachable {
             return true;
         }
 
-        #endregion
+#endregion
 
 
 
@@ -471,7 +483,7 @@ namespace net.fushizen.attachable {
 
         // Last manually selected player is cleared when we search and find them to not be a candidate
 
-        #region Bone search
+#region Bone search
 
         // Bone search has two modes:
         // Continuous scan - the initial mode, scans N bones per frame and selects the best continuously
@@ -542,6 +554,8 @@ namespace net.fushizen.attachable {
         VRCPlayerApi[] boneScanPlayers;
         int nextBoneScanPlayerIndex, boneScanPlayerCount;
 
+        VRCPlayerApi currentlyScanningTarget;
+
         /// <summary>
         /// This player tag has a nonzero length string if the associated player has data in the bone heap.
         /// </summary>
@@ -551,6 +565,14 @@ namespace net.fushizen.attachable {
         {
             //var sw = new System.Diagnostics.Stopwatch();
             //sw.Start();
+
+            if (Utilities.IsValid(currentlyScanningTarget))
+            {
+                ContinueBoneScan();
+                return;
+            }
+
+            //Debug.Log("=== ScanNextPlayer: Select next ===");
 
             VRCPlayerApi player;
 
@@ -565,7 +587,8 @@ namespace net.fushizen.attachable {
                 if (!Utilities.IsValid(player)) continue;
                 if (Vector3.Distance(player.GetPosition(), pos) <= maxDistance)
                 {
-                    BoneScan(player);
+                    //Debug.Log("=== ScanNextPlayer: SBS");
+                    StartBoneScan(player);
                     return;
                 } else {
                     var tag = player.GetPlayerTag(HAS_DATA_FLAG);
@@ -589,13 +612,44 @@ namespace net.fushizen.attachable {
             nextBoneScanPlayerIndex = 0;
         }
 
-        void BoneScan(VRCPlayerApi player) {
-            if (!LoadBoneData(player)) return;
 
-            player.SetPlayerTag(HAS_DATA_FLAG, "x");
+        int nextBone = 0;
+        void StartBoneScan(VRCPlayerApi player) {
+            if (!LoadBoneData(player))
+            {
+                //Debug.Log("=== StartBoneScan failed to load bone data");
+                nextBone = 0;
+                currentlyScanningTarget = null;
+                return;
+            }
+
+            //Debug.Log($"=== StartBoneScan: Init {player.playerId}");
+
+            currentlyScanningTarget = player;
+            nextBone = 0;
+            currentlyScanningTarget.SetPlayerTag(HAS_DATA_FLAG, "x");
+
+            // On android, we take a break after loading the raw bone data before processing it
+#if !UNITY_ANDROID
+            ContinueBoneScan();
+#endif
+        }
+
+        void ContinueBoneScan() {
+            //Debug.Log($"=== ContinueBoneScan: {currentlyScanningTarget.playerId}/{nextBone}");
+            int lastBone = nextBone + BONES_PER_FRAME;
+
+            if (!Utilities.IsValid(currentlyScanningTarget))
+            {
+                nextBone = 0;
+                currentlyScanningTarget = null;
+                //Debug.Log($"=== ContinueBoneScan: no target, reset");
+                return;
+            }
 
             int nBones = bone_targets.Length;
-            
+            if (lastBone > nBones) lastBone = nBones;
+
             if (distanceBuffer == null)
             {
                 distanceBuffer = new float[nBones];
@@ -605,21 +659,12 @@ namespace net.fushizen.attachable {
 
             float bestPrefDist = boneHeap._a_BestBoneDistance();
 
-            if (lastBonePosLoadFrame != Time.frameCount)
-            {
-                if (!LoadBoneData(player))
-                {
-                    Debug.Log("Failed to load bone data");
-                    return;
-                }
-            }
+            var targetIndex = (targetPlayerId == currentlyScanningTarget.playerId) ? targetBoneId : -1;
 
-            var targetIndex = (targetPlayerId == player.playerId) ? targetBoneId : -1;
-
-            for (int i = 0; i < nBones; i++)
+            for (int i = nextBone; i < lastBone; i++)
             {
                 boneDistance = 999;
-                bool success = DistanceToBone(player, i) && (trueBoneDistance <= range || i == targetIndex);
+                bool success = DistanceToBone(currentlyScanningTarget, i) && (trueBoneDistance <= range || i == targetIndex);
 
                 if (!success)
                 {
@@ -640,7 +685,7 @@ namespace net.fushizen.attachable {
             }
 
 
-            for (int i = 0; i < nBones; i++)
+            for (int i = nextBone; i < lastBone; i++)
             {
                 // Always record whatever our current target is, so that we have good data to use for (red) bone model display.
                 if (distanceBuffer[i] > bestPrefDist * secondaryCandidateMult && targetIndex != i)
@@ -653,12 +698,25 @@ namespace net.fushizen.attachable {
                 }
             }
 
-            boneHeap._a_UpdateBatch(player, distanceBuffer, boneLengthBuffer, boneTrueDistanceBuffer);
+            boneHeap._a_UpdateBatch(currentlyScanningTarget, nextBone, lastBone, distanceBuffer, boneLengthBuffer, boneTrueDistanceBuffer);
+
+            if (lastBone == nBones)
+            {
+                currentlyScanningTarget = null;
+                nextBone = 0;
+                //Debug.Log($"=== ContinueBoneScan: completed");
+
+            }
+            else
+            {
+                //Debug.Log($"=== ContinueBoneScan: nextBone: {nextBone} => {lastBone}");
+                nextBone = lastBone;
+            }
         }
 
-        #endregion
+#endregion
 
-        #region Held controls
+#region Held controls
 
         float closestBoneDistance;
 
@@ -723,6 +781,7 @@ namespace net.fushizen.attachable {
             }
 
             mat_bone.SetColor("_Color", color);
+            mat_sphere.SetColor("_Color", color);
         }
 
         int noValidBoneFrames = 0;
@@ -904,6 +963,6 @@ namespace net.fushizen.attachable {
             }
         }
 
-        #endregion
+#endregion
     }
 }
