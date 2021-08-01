@@ -10,6 +10,7 @@ To upgrade from 1.0 to 1.1:
 ### Major changes in 1.1
 
 * Oculus Quest support! Note, however, that due to udon overhead, it's recommended to avoid having more than about 10 props tracking at a time (as measured on a Quest 1).
+* Behavior/stability when making attachable props prefabs has been improved.
 * To reduce overhead when many props are tracking, object sync is no longer used to sync the position of props held in hand.
 * Directionality now favors the positive Z direction from the directionality marker, instead of both positive and negative Z directions.
 * The bone selection interface now considers bones from multiple nearby players, making selection more intuitive.
