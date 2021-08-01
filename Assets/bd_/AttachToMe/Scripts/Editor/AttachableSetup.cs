@@ -49,28 +49,15 @@ namespace net.fushizen.attachable {
         }
 
         static void MakeAttachable(GameObject target) {
-            var path = AssetDatabase.GUIDToAssetPath(SUPPORT_PREFAB_GUID);
-            if (path == null)
-            {
-                Debug.LogError("Unable to find support prefab");
-                return;
-            }
-
-            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
-            if (path == null)
-            {
-                Debug.LogError("Unable to load support prefab");
-                return;
-            }
-
             Undo.RegisterCompleteObjectUndo(target, "Make pickup attachable");
 
             var isActive = target.activeSelf;
             target.SetActive(true);
 
-            if (target.GetComponent<VRCObjectSync>() == null)
+            var objectSync = target.GetComponent<VRCObjectSync>();
+            if (objectSync != null)
             {
-                Undo.AddComponent<VRCObjectSync>(target);
+                Undo.DestroyObjectImmediate(objectSync);
             }
 
             if (target.GetUdonSharpComponent<Attachable>())
@@ -137,14 +124,10 @@ namespace net.fushizen.attachable {
             var updateLoop = gameObj.AddComponent<AttachableInternalUpdateLoop>();
             updateLoop.enabled = false;
 
-            var postLateUpdate = gameObj.AddComponent<AttachableInternalPostLateUpdate>();
-            postLateUpdate.enabled = false;
-
             UdonSharpEditor.UdonSharpEditorUtility.ConvertToUdonBehaviours(new UdonSharp.UdonSharpBehaviour[]
             {
                 attachable,
-                updateLoop,
-                postLateUpdate
+                updateLoop
             });
 
             var config = gameObj.AddComponent<AttachableConfig>();

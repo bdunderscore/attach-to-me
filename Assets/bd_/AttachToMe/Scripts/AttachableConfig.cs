@@ -101,7 +101,8 @@ namespace net.fushizen.attachable
             // Upgrade: Remove references to the postLateUpdateLoop
             if (postLateUpdateLoop != null)
             {
-                DestroyImmediate(postLateUpdateLoop);
+                DestroyImmediate(postLateUpdateLoop, true);
+                postLateUpdateLoop = null;
             }
         }
 
@@ -202,6 +203,7 @@ namespace net.fushizen.attachable
         private void OnValidate()
         {
             if (EditorApplication.isPlayingOrWillChangePlaymode) return;
+            if (PrefabUtility.IsPartOfPrefabAsset(gameObject)) return;
 
             EditorApplication.delayCall += () =>
             {
@@ -268,7 +270,7 @@ namespace net.fushizen.attachable
                 
                 while (null != (curObjectSync = t_pickup.GetComponent<VRCObjectSync>()))
                 {
-                    DestroyImmediate(curObjectSync);
+                    DestroyImmediate(curObjectSync, true);
                 }
             }
         }
@@ -300,6 +302,8 @@ namespace net.fushizen.attachable
 
         internal static void CheckGlobalTrackingReference(Attachable target)
         {
+            if (!target.gameObject.scene.IsValid()) return;
+
             // Find an existing globaltracking object, if any
             var existingTrackingObject = FindGlobalTrackingObject(target.gameObject.scene);
             if (existingTrackingObject != null) {
