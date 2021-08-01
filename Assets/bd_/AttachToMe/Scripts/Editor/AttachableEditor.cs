@@ -37,10 +37,8 @@ namespace net.fushizen.attachable
 
         SerializedProperty m_range;
         SerializedProperty m_directionality;
-        SerializedProperty m_preferSelf;
         SerializedProperty m_disableFingerTracking;
         SerializedProperty m_respawnTime;
-        SerializedProperty m_trackOnUpdate;
 
         SerializedProperty m_perm_removeTracee;
         SerializedProperty m_perm_removeOwner;
@@ -59,7 +57,6 @@ namespace net.fushizen.attachable
 
             public GUIContent header_selection;
             public GUIContent m_range;
-            public GUIContent m_preferSelf;
             public GUIContent m_disableFingerTracking;
             public GUIContent m_respawnTime;
 
@@ -98,7 +95,6 @@ namespace net.fushizen.attachable
                 m_t_pickup = new GUIContent("ピックアップオブジェクト"),
                 header_selection = new GUIContent("選択設定"),
                 m_range = new GUIContent("ボーン選択範囲", "この範囲内のボーンが選択対象になります"),
-                m_preferSelf = new GUIContent("自分を優先", "チェックが入った場合、自分自身を最初の選択候補として設定します。入ってない場合は自分が最後になります。"),
                 m_directionality = new GUIContent("指向性", "この数値をゼロ以上にすると、【方向マーカー】に指定されたオブジェクトのZ+方向の先にあるボーンを優先的に選択します。"),
                 m_t_attachmentDirection = new GUIContent("方向マーカー", "このオブジェクトのZ+方向と位置を基準にボーンの選択を行います"),
                 m_disableFingerTracking = new GUIContent("指ボーンに追従しない"),
@@ -130,7 +126,6 @@ namespace net.fushizen.attachable
                 m_t_pickup = new GUIContent("Pickup object"),
                 header_selection = new GUIContent("Selection configuration"),
                 m_range = new GUIContent("Bone selection radius", "Bones within this radius will be considered as potential targets"),
-                m_preferSelf = new GUIContent("Prefer self", "If selected, the player holding the pickup will be the first candidate player. If not, they will be the last."),
                 m_directionality = new GUIContent("Directionality", "If you set this value above zero, "),
                 m_t_attachmentDirection = new GUIContent("Direction marker", "This object's Z+ direction and position will be used as the basis for bone selection."),
                 m_disableFingerTracking = new GUIContent("Disable finger bone tracking"),
@@ -166,9 +161,7 @@ namespace net.fushizen.attachable
 
             m_range = serializedObject.FindProperty("range");
             m_directionality = serializedObject.FindProperty("directionality");
-            m_preferSelf = serializedObject.FindProperty("preferSelf");
             m_disableFingerTracking = serializedObject.FindProperty("disableFingerTracking");
-            m_trackOnUpdate = serializedObject.FindProperty("trackOnUpdate");
             m_respawnTime = serializedObject.FindProperty("respawnTime");
 
             m_perm_removeTracee = serializedObject.FindProperty("perm_removeTracee");
@@ -234,7 +227,6 @@ namespace net.fushizen.attachable
             if (show_selection)
             {
                 EditorGUILayout.PropertyField(m_range, lang.m_range);
-                EditorGUILayout.PropertyField(m_preferSelf, lang.m_preferSelf);
                 if (!isMultiple) EditorGUILayout.PropertyField(m_t_attachmentDirection, lang.m_t_attachmentDirection);
             }
 

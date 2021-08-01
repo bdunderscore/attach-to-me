@@ -162,7 +162,6 @@ namespace net.fushizen.attachable {
         Transform t_attachmentDirection;
         float range, directionality;
         VRC_Pickup.PickupHand currentHand;
-        bool preferSelf;
 
         /// <summary>
         /// The current target player ID; this is the ID of the player that the displayed bone model is tracking,
@@ -398,7 +397,6 @@ namespace net.fushizen.attachable {
             t_attachmentDirection = attachable.t_attachmentDirection;
             this.range = attachable.range;
             this.directionality = attachable.directionality;
-            preferSelf = attachable.preferSelf;
 
             targetPlayerId = curPlayer;
             targetBoneId = curBone;

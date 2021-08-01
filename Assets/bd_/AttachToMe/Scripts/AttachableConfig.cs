@@ -49,8 +49,6 @@ namespace net.fushizen.attachable
         public float range = 2;
         [Range(0, 1)]
         public float directionality = 0;
-        public bool preferSelf = true;
-        public bool trackOnUpdate;
         public bool disableFingerTracking;
 
         public bool perm_removeTracee = true;
@@ -61,11 +59,6 @@ namespace net.fushizen.attachable
         public string anim_onTrack, anim_onHeld, anim_onTrackLocal, anim_onHeldLocal;
 
         public float respawnTime;
-
-        /// <summary>
-        /// Some validation steps can't be done in OnValidate - this flag lets us move them to the editor Update event instead.
-        /// </summary>
-        private bool needValidateOnUpdate = false;
 
         private static bool debugComponentsVisibleInInspector = false;
 
@@ -235,8 +228,6 @@ namespace net.fushizen.attachable
             syncProp(ref anythingChanged, nameof(t_attachmentDirection));
             syncProp(ref anythingChanged, nameof(range));
             syncProp(ref anythingChanged, nameof(directionality));
-            syncProp(ref anythingChanged, nameof(preferSelf));
-            syncProp(ref anythingChanged, nameof(trackOnUpdate));
             syncProp(ref anythingChanged, nameof(disableFingerTracking));
             syncProp(ref anythingChanged, nameof(perm_removeOther));
             syncProp(ref anythingChanged, nameof(perm_removeOwner));

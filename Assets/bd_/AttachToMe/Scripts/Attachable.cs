@@ -41,7 +41,6 @@ namespace net.fushizen.attachable
         public float range = 0.5f;
         [Range(0,1)]
         public float directionality = 0.5f;
-        public bool preferSelf = true;
         public bool disableFingerSelection = false;
 
         public bool perm_removeTracee = true;
