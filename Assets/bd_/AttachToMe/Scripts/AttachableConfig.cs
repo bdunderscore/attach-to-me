@@ -225,6 +225,11 @@ namespace net.fushizen.attachable
 
             this.attachable = UdonSharpEditorUtility.GetBackingUdonBehaviour(attachable);
 
+            if (anim_onHeld == null) anim_onHeld = "";
+            if (anim_onHeldLocal == null) anim_onHeldLocal = "";
+            if (anim_onTrack == null) anim_onTrack = "";
+            if (anim_onTrackLocal == null) anim_onTrackLocal = "";
+
             syncProp(ref anythingChanged, nameof(t_pickup));
             syncProp(ref anythingChanged, nameof(t_attachmentDirection));
             syncProp(ref anythingChanged, nameof(range));
