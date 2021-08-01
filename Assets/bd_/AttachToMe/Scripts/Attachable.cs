@@ -87,11 +87,6 @@ namespace net.fushizen.attachable
         AttachableBoneSelection boneSelection;
 
         /// <summary>
-        /// Object Sync component on the pickup
-        /// </summary>
-        private VRCObjectSync objectSync;
-
-        /// <summary>
         /// Material used to render the bone wireframes
         /// </summary>
         private Material mat_bone;
@@ -115,7 +110,7 @@ namespace net.fushizen.attachable
         #region Core tracking state state
 
         // When tracking a bone, contains the position and rotation offset relative to that bone.
-        // When not tracking a bone, contains the local position/rotation of this object (if objectsync is not in use)
+        // When not tracking a bone, contains the local position/rotation of this object
         [UdonSynced]
         Vector3 sync_pos;
         [UdonSynced]
@@ -193,7 +188,6 @@ namespace net.fushizen.attachable
             proxy = t_pickup.GetComponent<AttachableInternalPickupProxy>();
             proxy._a_SetController(this);
             pickup = (VRC_Pickup) t_pickup.GetComponent(typeof(VRC_Pickup));
-            objectSync = (VRCObjectSync) t_pickup.GetComponent(typeof(VRCObjectSync));
 
             onHold = globalTracking.GetComponent<AttachablesGlobalOnHold>();
             boneSelection = globalTracking.GetComponent<AttachableBoneSelection>();
@@ -273,8 +267,6 @@ namespace net.fushizen.attachable
         /// This will schedule itself to be re-executed periodically until dropped.
         /// </summary>
         void SyncHeldPosition() {
-            if (objectSync != null || !Networking.IsOwner(gameObject)) return;
-
             if (isHeldLocally)
             {
                 var localPlayer = Networking.LocalPlayer;
@@ -330,7 +322,6 @@ namespace net.fushizen.attachable
             Networking.SetOwner(Networking.LocalPlayer, t_pickup.gameObject);
             t_pickup.localPosition = initialPosition;
             t_pickup.localRotation = initialRotation;
-            objectSync.FlagDiscontinuity();
 
             ClearRespawnTimer();
             RequestSerialization();

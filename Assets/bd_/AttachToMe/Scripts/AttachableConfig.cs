@@ -40,9 +40,6 @@ namespace net.fushizen.attachable
     [ExecuteInEditMode]
     public class AttachableConfig : MonoBehaviour
     {
-        [SerializeField]
-        int migrationVersion = 0;
-
         [HideInInspector]
         public bool isNewlyCreated = true;
 
@@ -64,8 +61,6 @@ namespace net.fushizen.attachable
         public string anim_onTrack, anim_onHeld, anim_onTrackLocal, anim_onHeldLocal;
 
         public float respawnTime;
-
-        public bool useObjectSync;
 
         /// <summary>
         /// Some validation steps can't be done in OnValidate - this flag lets us move them to the editor Update event instead.
@@ -225,12 +220,6 @@ namespace net.fushizen.attachable
         {
             if (EditorApplication.isPlayingOrWillChangePlaymode) return;
 
-            if (migrationVersion < 1)
-            {
-                useObjectSync = true;
-                migrationVersion = 1;
-            }
-
             FindReferences();
             SyncAll();
         }
@@ -277,15 +266,11 @@ namespace net.fushizen.attachable
 
             if (t_pickup != null)
             {
-                var curObjectSync = t_pickup.GetComponent<VRCObjectSync>();
-                bool isObjectSync = curObjectSync;
-
-                if (isObjectSync && !useObjectSync)
+                VRCObjectSync curObjectSync;
+                
+                while (null != (curObjectSync = t_pickup.GetComponent<VRCObjectSync>()))
                 {
                     DestroyImmediate(curObjectSync);
-                } else if (!isObjectSync && useObjectSync)
-                {
-                    curObjectSync = t_pickup.gameObject.AddComponent<VRCObjectSync>();
                 }
             }
         }
