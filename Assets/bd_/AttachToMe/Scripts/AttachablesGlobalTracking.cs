@@ -86,6 +86,18 @@ namespace net.fushizen.attachable
             attachables[nextFreeSlot++] = a;
         }
 
+        public void _a_Deregister(Attachable a)
+        {
+            _a_DisableTracking(a);
+            int idx = System.Array.IndexOf(attachables, a);
+
+            if (idx >= 0)
+            {
+                System.Array.Copy(attachables, idx + 1, attachables, idx, nextFreeSlot - idx - 1);
+                nextFreeSlot--;
+            }
+        }
+
         public void _a_EnableTracking(Attachable a)
         {
             if (System.Array.IndexOf(trackingAttachables, a) >= 0) return;

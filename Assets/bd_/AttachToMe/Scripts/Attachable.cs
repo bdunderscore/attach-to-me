@@ -224,6 +224,16 @@ namespace net.fushizen.attachable
             sync_rot = t_pickup.localRotation;
         }
 
+        private void OnDestroy()
+        {
+            boneSelection._a_EndSelection(this);
+            globalTracking._a_Deregister(this);
+        }
+
+        private void OnDisable()
+        {
+            boneSelection._a_EndSelection(this);
+        }
 
         #endregion
 

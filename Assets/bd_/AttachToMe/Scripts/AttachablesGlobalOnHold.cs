@@ -23,7 +23,9 @@ using VRC.Udon.Common;
 namespace net.fushizen.attachable
 {
     /// <summary>
-    /// Controls tutorial activation
+    /// Controls tutorial activation.
+    /// 
+    /// I should probably rename this sometime (need to figure out how to make that upgrade path work...)
     /// </summary>
     [DefaultExecutionOrder(-2)]
     public class AttachablesGlobalOnHold : UdonSharpBehaviour
