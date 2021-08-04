@@ -1,7 +1,12 @@
 site_name: Attach-To-Me for VRChat
 nav:
-  - Documentation: index.md
-  - 日本語: jp.md
+  - Index: index.md
+  - English: 
+    - Overview: en/index.md
+    - 'Upgrade guide': en/upgrade.md
+  - 日本語:
+    - 概要: jp/index.md
+    - 更新ガイド: jp/upgrade.md
 theme:
   name: 'material'
 site_url: "https://bdunderscore.github.io/attach-to-me/"
