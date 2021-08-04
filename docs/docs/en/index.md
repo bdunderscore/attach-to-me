@@ -37,7 +37,7 @@ Bones will be shown in different colors depending on the tracking state:
 Install the following packages, in order:
 
 * VRCSDK3-Worlds
-* [UdonSharp](https://github.com/MerlinVR/UdonSharp/releases) (version 0.19.12 or higher)
+* [UdonSharp](https://github.com/MerlinVR/UdonSharp/releases) (version 0.20.1 or higher)
 * VRC Attach-To-Me
 
 ### Per-prop setup

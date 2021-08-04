@@ -37,7 +37,7 @@
 以下のパッケージをまずUnityに導入してください
 
 * VRCSDK3-Worlds
-* [UdonSharp](https://github.com/MerlinVR/UdonSharp/releases) (version 0.19.12 以上)
+* [UdonSharp](https://github.com/MerlinVR/UdonSharp/releases) (version 0.20.1 以上)
 * VRC Attach-To-Me
 
 ### オブジェクト設定
