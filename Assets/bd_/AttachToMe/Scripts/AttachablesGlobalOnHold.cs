@@ -27,7 +27,6 @@ namespace net.fushizen.attachable
     /// 
     /// I should probably rename this sometime (need to figure out how to make that upgrade path work...)
     /// </summary>
-    [DefaultExecutionOrder(-2)]
     public class AttachablesGlobalOnHold : UdonSharpBehaviour
     {
         public Animator desktopTutorial;
@@ -62,7 +61,11 @@ namespace net.fushizen.attachable
 
         public override void OnPlayerJoined(VRCPlayerApi player)
         {
-            if (player.isLocal) SelectTutorial();
+            if (player.isLocal)
+            {
+                // Wait a bit before committing to VR or non-VR, as IsUserInVR is not immediately correct.
+                SendCustomEventDelayedSeconds(nameof(_a_SelectTutorial), 2.0f);
+            }
         }
 
         void ConfigurePin(TutorialPin pin)
@@ -71,7 +74,7 @@ namespace net.fushizen.attachable
             pin.scale = tutorialPinScale;
         }
 
-        void SelectTutorial()
+        public void _a_SelectTutorial()
         {
             if (!vrTutorial.transform.parent.gameObject.activeInHierarchy)
             {
@@ -145,6 +148,7 @@ namespace net.fushizen.attachable
             }
 
             var allAttachables = globalTracking._a_GetAllRegistered();
+            if (allAttachables == null) return false; // Not yet initialized
             if (limit > allAttachables.Length) limit = allAttachables.Length;
 
             int myPlayerId = player.playerId;
@@ -203,7 +207,7 @@ namespace net.fushizen.attachable
 
         public void _a_OnBoneSelect()
         {
-            SelectTutorial();
+            _a_SelectTutorial();
             desktopTutorial.SetBool("SelectBoneDone", true);
             tut_boneSelect = true;
             pin_selectBone._a_SetShouldDisplay(false);
@@ -211,7 +215,7 @@ namespace net.fushizen.attachable
 
         public void _a_OnPlayerSelect()
         {
-            SelectTutorial();
+            _a_SelectTutorial();
             desktopTutorial.SetBool("SelectPlayerDone", true);
             tut_playerSelect = true;
             pin_selectPlayer._a_SetShouldDisplay(false);
@@ -219,7 +223,7 @@ namespace net.fushizen.attachable
 
         public void _a_OnAttachedPickup()
         {
-            SelectTutorial();
+            _a_SelectTutorial();
             desktopTutorial.SetBool("AttachedPickupDone", true);
             tut_pickup = true;
         }
@@ -232,7 +236,7 @@ namespace net.fushizen.attachable
 
             activeHeld = a;
 
-            SelectTutorial();
+            _a_SelectTutorial();
             desktopTutorial.SetBool("InHand", true);
 
             pin_selectBone._a_SetShouldDisplay(!tut_boneSelect);
@@ -256,7 +260,7 @@ namespace net.fushizen.attachable
             {
                 activeHeld = null;
 
-                SelectTutorial();
+                _a_SelectTutorial();
                 desktopTutorial.SetBool("InHand", false);
                 pin_selectBone._a_SetShouldDisplay(false);
                 pin_selectPlayer._a_SetShouldDisplay(false);

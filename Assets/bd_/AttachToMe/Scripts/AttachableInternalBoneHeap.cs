@@ -35,13 +35,14 @@ namespace net.fushizen.attachable
     /// resulting in sift-up or sift-down operations. As bones are selected with trigger, we'll mark those bone IDs as
     /// forbidden and skip them on future updates.
     /// </summary>
-    [DefaultExecutionOrder(-4)]
     public class AttachableInternalBoneHeap : UdonSharpBehaviour
     {
         int boneCount;
 
-        void Start()
+        public void _a_CheckInit()
         {
+            if (slotToPlayerId != null) return;
+
             boneCount = GetComponent<AttachableBoneData>().bone_targets.Length;
 
             slotToPlayerId = new int[4];
@@ -380,6 +381,8 @@ namespace net.fushizen.attachable
 
         public override void OnPlayerJoined(VRCPlayerApi player)
         {
+            _a_CheckInit();
+
             // Map the new player to a slot
             int newPlayerSlot = FindOpenSlot();
 
@@ -394,6 +397,8 @@ namespace net.fushizen.attachable
 
         public override void OnPlayerLeft(VRCPlayerApi player)
         {
+            if (slotToPlayerId == null) return;
+
             // Player tags are cleared before entering this function, so search by ID instead...
             int slot = System.Array.IndexOf(slotToPlayerId, player.playerId);
 

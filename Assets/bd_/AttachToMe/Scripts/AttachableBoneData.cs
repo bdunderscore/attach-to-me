@@ -24,13 +24,24 @@ namespace net.fushizen.attachable
     /// <summary>
     /// Holds static tables of bone relationship data.
     /// </summary>
-    [DefaultExecutionOrder(-100)]
+   
     public class AttachableBoneData : UdonSharpBehaviour
     {
+        bool initDone = false;
+
         void Start()
         {
+            _a_CheckInit();
             enabled = false;
-            InitBoneData();
+        }
+
+        public void _a_CheckInit()
+        {
+            if (!initDone)
+            {
+                initDone = true;
+                InitBoneData();
+            }
         }
 
         [HideInInspector]
@@ -57,7 +68,7 @@ namespace net.fushizen.attachable
             return bone_hand[trackingBone];
         }
 
-        void InitBoneData()
+        public void InitBoneData()
         {
             int last = -1;
             bone_targets = new object[52];

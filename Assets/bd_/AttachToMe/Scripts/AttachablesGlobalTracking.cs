@@ -22,7 +22,6 @@ using VRC.Udon.Common;
 
 namespace net.fushizen.attachable
 {
-    [DefaultExecutionOrder(-3)]
     public class AttachablesGlobalTracking : UdonSharpBehaviour
     {
         readonly float PICKUP_TIMEOUT = 4.0f;
@@ -49,7 +48,12 @@ namespace net.fushizen.attachable
 
         public GameObject bonePosReaderPrefab;
 
-        void Start()
+        private void Start()
+        {
+            CheckInit(); // Run before Update
+        }
+
+        private void CheckInit()
         {
             if (attachables != null) return;
 
@@ -75,9 +79,7 @@ namespace net.fushizen.attachable
         {
             if (attachables == null || nextFreeSlot >= attachables.Length)
             {
-                if (attachables == null) {
-                    Start();
-                }
+                CheckInit();
 
                 attachables = ResizeArray(attachables, (int)(attachables.Length * 1.5));
                 trackingAttachables = ResizeArray(trackingAttachables, attachables.Length);
@@ -241,10 +243,12 @@ namespace net.fushizen.attachable
 
         private void Update()
         {
+            var localPlayer = Networking.LocalPlayer;
+            if (localPlayer == null) return; // avoid making a lot of noise in editor
+
             _a_RespawnBoneReader();
 
             float pos = Input.GetAxisRaw("Oculus_CrossPlatform_SecondaryThumbstickVertical");
-            var localPlayer = Networking.LocalPlayer;
 
             bool alt = false;
             if (!localPlayer.IsUserInVR())

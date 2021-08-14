@@ -24,7 +24,6 @@ namespace net.fushizen.attachable {
     /// <summary>
     /// Handles searching and selecting candidate bones while an attachable is held.
     /// </summary>
-    [DefaultExecutionOrder(0)]
     public class AttachableBoneSelection : UdonSharpBehaviour
     {
         /// <summary>
@@ -62,13 +61,23 @@ namespace net.fushizen.attachable {
         [HideInInspector]
         public int _a_trackingBone;
 
-        void Start()
-        {
+
+        bool initDone = false;
+
+        private bool CheckInit() {
+            if (initDone) return true;
             SetupReferences();
+            
+            boneData._a_CheckInit();
+            boneHeap._a_CheckInit();
+
             InitBoneData();
 
             enabled = false;
             targetPlayerId = targetBoneId = -1;
+            initDone = true;
+
+            return true;
         }
 
 #region Global references
@@ -382,6 +391,7 @@ namespace net.fushizen.attachable {
         public bool _a_StartSelection(VRC_Pickup.PickupHand hand, Attachable attachable, int curPlayer, int curBone)
         {
             if (activeAttachable != null && activeAttachable != attachable) return false;
+            if (!CheckInit()) return false;
 
             var sameAsLast = activeAttachable == lastAttachable;
 
@@ -443,6 +453,7 @@ namespace net.fushizen.attachable {
         public bool _a_EndSelection(Attachable attachable)
         {
             if (activeAttachable != attachable) return false;
+            if (!CheckInit()) return false;
 
             if (tracking)
             {
@@ -925,6 +936,7 @@ namespace net.fushizen.attachable {
         public override void InputUse(bool value, UdonInputEventArgs args)
         {
             if (!Networking.LocalPlayer.IsUserInVR()) return;
+            if (!CheckInit()) return;
 
             int index = args.handType == HandType.LEFT ? 0 : 1;
             bool heldInLeft = currentHand == VRC_Pickup.PickupHand.Left;

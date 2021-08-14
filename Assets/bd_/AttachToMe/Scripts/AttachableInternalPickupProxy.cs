@@ -40,12 +40,12 @@ namespace net.fushizen.attachable
 
         public override void OnDrop()
         {
-            _attachable._a_OnDrop();
+            if (_attachable != null) _attachable._a_OnDrop();
         }
 
         public override void OnPickup()
         {
-            _attachable._a_OnPickup();
+            if (_attachable != null) _attachable._a_OnPickup();
         }
 
         public override void OnOwnershipTransferred(VRCPlayerApi player)

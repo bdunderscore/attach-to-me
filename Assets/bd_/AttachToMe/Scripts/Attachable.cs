@@ -30,7 +30,6 @@ using UnityEditor;
 namespace net.fushizen.attachable
 {
     [UdonBehaviourSyncMode(BehaviourSyncMode.Manual)]
-    [DefaultExecutionOrder(0)]
     public class Attachable : UdonSharpBehaviour
     {
         #region Inspector fields
@@ -191,21 +190,36 @@ namespace net.fushizen.attachable
 
         #region Initialization
 
-        void SetupReferences()
+        void Start()
+        {
+            // While we don't rely on initialization being in the right order globally,
+            // we need to bootstrap some source of events, in order to kick off full initialization
+            // when someone picks us up. So, set up the pickup proxy right away.
+
+            InitProxyReference();
+        }
+
+        void InitProxyReference()
+        {
+            proxy = t_pickup.GetComponent<AttachableInternalPickupProxy>();
+            proxy._a_SetController(this);
+            pickup = (VRC_Pickup)t_pickup.GetComponent(typeof(VRC_Pickup));
+        }
+
+        bool SetupReferences()
         {
             var gtPath = Networking.LocalPlayer.GetPlayerTag("net.fushizen.attachable.GlobalTrackingPath");
 
             if (gtPath == null)
             {
                 Debug.LogError("Attachable: Global tracking object was not found.");
+                return false;
             } else
             {
                 globalTracking = GameObject.Find(gtPath).GetComponent<AttachablesGlobalTracking>();
             }
 
-            proxy = t_pickup.GetComponent<AttachableInternalPickupProxy>();
-            proxy._a_SetController(this);
-            pickup = (VRC_Pickup) t_pickup.GetComponent(typeof(VRC_Pickup));
+            InitProxyReference();
 
             onHold = globalTracking.GetComponent<AttachablesGlobalOnHold>();
             boneSelection = globalTracking.GetComponent<AttachableBoneSelection>();
@@ -214,11 +228,25 @@ namespace net.fushizen.attachable
             globalTrackingScale = t_support.localScale.x;
 
             updateLoop = GetComponent<AttachableInternalUpdateLoop>();
+
+            return true;
         }
 
-        void Start()
+        private bool isInitComplete;
+
+        /// <summary>
+        /// Checks whether this object has been initialized; if not, attempts initialization.
+        /// Initialization may fail if this object receives an event before the AttachableLocateGlobalTracking object.
+        /// Due to VRC bugs, we do not rely on DefaultExecutionOrder to sequence this.
+        /// </summary>
+        /// <returns>True if initialization was successful, false if not</returns>
+        private bool CheckInit()
         {
-            SetupReferences();
+            if (isInitComplete) return true;
+            if (!SetupReferences()) return false;
+
+            // We can't fail after this point, and we want to avoid potential recursion in the init logic below.
+            isInitComplete = true;
 
             _depth = 0;
             var p = transform.parent;
@@ -240,16 +268,20 @@ namespace net.fushizen.attachable
 
             sync_pos = t_pickup.localPosition;
             sync_rot = t_pickup.localRotation;
+
+            return true;
         }
 
         private void OnDestroy()
         {
+            if (globalTracking == null) return;
             boneSelection._a_EndSelection(this);
             globalTracking._a_Deregister(this);
         }
 
         private void OnDisable()
         {
+            if (globalTracking == null) return;
             boneSelection._a_EndSelection(this);
         }
 
@@ -578,7 +610,7 @@ namespace net.fushizen.attachable
         /// <returns>True if successful, false if tracking failed for some reason (eg, missing target or missing bone)</returns>
         public void _a_UpdateTracking()
         {
-            if (globalTracking.bonePosReader == null) return;
+            if (globalTracking == null || globalTracking.bonePosReader == null) return;
 
             if (isHeldLocally)
             {
@@ -682,6 +714,8 @@ namespace net.fushizen.attachable
 
         public void _a_OnPickup()
         {
+            if (!CheckInit()) return;
+
             Networking.SetOwner(Networking.LocalPlayer, gameObject);
 
             sync_heldRemote = true;
@@ -708,6 +742,8 @@ namespace net.fushizen.attachable
 
         public void _a_OnDrop()
         {
+            if (!CheckInit()) return;
+
             onHold._a_OnDrop(this);
 
             isHeldLocally = false;
@@ -744,6 +780,8 @@ namespace net.fushizen.attachable
 
         public override void OnOwnershipTransferred(VRCPlayerApi newOwner)
         {
+            if (!CheckInit()) return;
+
             // This may cancel tracking or force drop as needed
             _a_UpdateTracking();
 
@@ -779,11 +817,16 @@ namespace net.fushizen.attachable
         public void _a_SetPickupEnabled(bool allowAttachPickup)
         {
             this.allowAttachPickup = allowAttachPickup;
+
+            if (!CheckInit()) return;
+
             _a_SetPickupPerms();
         }
 
         public void _a_TryRemoveFromSelf()
         {
+            if (!CheckInit()) return;
+
             if (!isHeldLocally && sync_targetPlayer == Networking.LocalPlayer.playerId && _a_HasPickupPermissions())
             {
                 Networking.SetOwner(Networking.LocalPlayer, gameObject);
@@ -794,6 +837,7 @@ namespace net.fushizen.attachable
 
         public void _a_SetPickupPerms()
         {
+            if (!CheckInit()) return;
             if (isHeldLocally) return;
 
             if (sync_heldRemote || (sync_targetPlayer >= 0 && !allowAttachPickup && Time.timeSinceLevelLoad >= forcePickupEnabledUntil))
@@ -826,6 +870,17 @@ namespace net.fushizen.attachable
 
         public override void OnDeserialization()
         {
+            if (!CheckInit())
+            {
+                SendCustomEventDelayedSeconds(nameof(_a_DelayedOnDeserialization), 1.0f);
+            }
+            else
+            {
+                _a_DelayedOnDeserialization();
+            }
+        }
+
+        public void _a_DelayedOnDeserialization() {
             _a_UpdateTracking();
             _a_SetPickupPerms();
             _a_SyncAnimator();
@@ -833,17 +888,9 @@ namespace net.fushizen.attachable
 
         public override void OnPlayerJoined(VRCPlayerApi player)
         {
-            if (Networking.IsOwner(gameObject)) RequestSerialization();
-
-            // This is mostly just to initialize things once networking is up and running
-            _a_UpdateTracking();
-            _a_SetPickupPerms();
-            _a_SyncAnimator();
-
-            // Workaround dumb vrchat bugs with late joiners :(
             if (Networking.IsOwner(gameObject))
             {
-                SendCustomEventDelayedSeconds("_a_RequestSerialization", 1.0f);
+                // Workaround dumb vrchat bugs with late joiners :(
                 SendCustomEventDelayedSeconds("_a_RequestSerialization", 2.5f);
             }
         }
