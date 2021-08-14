@@ -206,7 +206,17 @@ namespace net.fushizen.attachable
                 }
 
                 var gameObject = VRCInstantiate(bonePosReaderPrefab);
-                bonePosReader = gameObject.GetComponent<AttachableBonePositionReader>();
+                bonePosReader = (AttachableBonePositionReader)gameObject.GetComponent(typeof(UdonBehaviour));
+                if (bonePosReader == null)
+                {
+                    Debug.LogError("[Attach-To-Me] BonePosReader udon behaviour is missing");
+                }
+                bonePosReader.suppressPlayerId = -2;
+                if (bonePosReader.suppressPlayerId != -2)
+                {
+                    Debug.LogError("[Attach-To-Me] BonePosReader udon behaviour is not responding to property edits");
+                }
+
                 bonePosReader.suppressPlayerId = lastPlayerId;
 
                 SendCustomEventDelayedSeconds(nameof(_a_ClearSuppressedPlayer), 1.0f);

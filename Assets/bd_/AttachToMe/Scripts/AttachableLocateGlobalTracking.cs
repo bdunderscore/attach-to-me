@@ -37,6 +37,7 @@ namespace net.fushizen.attachable
             }
 
             Networking.LocalPlayer.SetPlayerTag("net.fushizen.attachable.GlobalTrackingPath", path);
+            Debug.Log("=== [Attach-To-Me] Installed global tracking reference");
         }
     }
 }

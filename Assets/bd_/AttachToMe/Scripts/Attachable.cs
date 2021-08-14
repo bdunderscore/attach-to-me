@@ -191,16 +191,23 @@ namespace net.fushizen.attachable
 
         #region Initialization
 
-        void SetupReferences()
+        bool SetupReferences()
         {
             var gtPath = Networking.LocalPlayer.GetPlayerTag("net.fushizen.attachable.GlobalTrackingPath");
 
             if (gtPath == null)
             {
-                Debug.LogError("Attachable: Global tracking object was not found.");
-            } else
+                Debug.LogError("[Attach-To-Me] Global tracking object was not found.");
+                return false;
+            }
+            else
             {
+                Debug.Log($"[Attach-To-Me] Global tracking reference: {gtPath}");
                 globalTracking = GameObject.Find(gtPath).GetComponent<AttachablesGlobalTracking>();
+                if (globalTracking == null)
+                {
+                    Debug.LogError("[Attach-To-Me] Global tracking object was not found at registered path");
+                }
             }
 
             proxy = t_pickup.GetComponent<AttachableInternalPickupProxy>();
@@ -214,11 +221,21 @@ namespace net.fushizen.attachable
             globalTrackingScale = t_support.localScale.x;
 
             updateLoop = GetComponent<AttachableInternalUpdateLoop>();
+
+            return true;
         }
 
         void Start()
         {
-            SetupReferences();
+            CheckInit();
+        }
+
+        bool initComplete = false;
+
+        bool CheckInit() {
+            if (initComplete) return true;
+            if (!SetupReferences()) return false;
+            initComplete = true;
 
             _depth = 0;
             var p = transform.parent;
@@ -240,6 +257,8 @@ namespace net.fushizen.attachable
 
             sync_pos = t_pickup.localPosition;
             sync_rot = t_pickup.localRotation;
+
+            return true;
         }
 
         private void OnDestroy()
@@ -285,6 +304,8 @@ namespace net.fushizen.attachable
         /// </summary>
         public void _a_SyncHeldPosition()
         {
+            if (!CheckInit()) return;
+
             isSyncScheduled = false;
 
             SyncHeldPosition();
@@ -578,6 +599,7 @@ namespace net.fushizen.attachable
         /// <returns>True if successful, false if tracking failed for some reason (eg, missing target or missing bone)</returns>
         public void _a_UpdateTracking()
         {
+            if (!CheckInit()) return;
             if (globalTracking.bonePosReader == null) return;
 
             if (isHeldLocally)
@@ -682,6 +704,7 @@ namespace net.fushizen.attachable
 
         public void _a_OnPickup()
         {
+            if (!CheckInit()) return;
             Networking.SetOwner(Networking.LocalPlayer, gameObject);
 
             sync_heldRemote = true;
@@ -708,6 +731,7 @@ namespace net.fushizen.attachable
 
         public void _a_OnDrop()
         {
+            if (!CheckInit()) return;
             onHold._a_OnDrop(this);
 
             isHeldLocally = false;
@@ -778,12 +802,16 @@ namespace net.fushizen.attachable
 
         public void _a_SetPickupEnabled(bool allowAttachPickup)
         {
+            if (!CheckInit()) return;
+
             this.allowAttachPickup = allowAttachPickup;
             _a_SetPickupPerms();
         }
 
         public void _a_TryRemoveFromSelf()
         {
+            if (!CheckInit()) return;
+
             if (!isHeldLocally && sync_targetPlayer == Networking.LocalPlayer.playerId && _a_HasPickupPermissions())
             {
                 Networking.SetOwner(Networking.LocalPlayer, gameObject);
@@ -794,6 +822,8 @@ namespace net.fushizen.attachable
 
         public void _a_SetPickupPerms()
         {
+            if (!CheckInit()) return;
+
             if (isHeldLocally) return;
 
             if (sync_heldRemote || (sync_targetPlayer >= 0 && !allowAttachPickup && Time.timeSinceLevelLoad >= forcePickupEnabledUntil))
@@ -807,6 +837,8 @@ namespace net.fushizen.attachable
 
         public bool _a_HasPickupPermissions()
         {
+            if (!CheckInit()) return false;
+
             if (sync_targetPlayer == -1 || (perm_fallback && VRCPlayerApi.GetPlayerCount() == 1))
             {
                 return true;
@@ -826,6 +858,24 @@ namespace net.fushizen.attachable
 
         public override void OnDeserialization()
         {
+            if (!CheckInit())
+            {
+                SendCustomEventDelayedSeconds(nameof(_a_DelayedProcessDeserialization), 1.0f);
+            }
+            else
+            {
+                _a_ProcessDeserialization();
+            }
+        }
+
+        public void _a_DelayedProcessDeserialization()
+        {
+            if (!CheckInit()) return;
+
+            _a_ProcessDeserialization();
+        }
+
+        public void _a_ProcessDeserialization() {
             _a_UpdateTracking();
             _a_SetPickupPerms();
             _a_SyncAnimator();
@@ -833,6 +883,8 @@ namespace net.fushizen.attachable
 
         public override void OnPlayerJoined(VRCPlayerApi player)
         {
+            if (!CheckInit()) return;
+
             if (Networking.IsOwner(gameObject)) RequestSerialization();
 
             // This is mostly just to initialize things once networking is up and running
@@ -859,10 +911,10 @@ namespace net.fushizen.attachable
 
         void InitAnimator()
         {
-            if (anim_onTrack.Equals("")) anim_onTrack = null;
-            if (anim_onTrackLocal.Equals("")) anim_onTrackLocal = null;
-            if (anim_onHeld.Equals("")) anim_onHeld = null;
-            if (anim_onHeldLocal.Equals("")) anim_onHeldLocal = null;
+            if ("".Equals(anim_onTrack)) anim_onTrack = null;
+            if ("".Equals(anim_onTrackLocal)) anim_onTrackLocal = null;
+            if ("".Equals(anim_onHeld)) anim_onHeld = null;
+            if ("".Equals(anim_onHeldLocal)) anim_onHeldLocal = null;
         }
 
         void _a_SyncAnimator()
