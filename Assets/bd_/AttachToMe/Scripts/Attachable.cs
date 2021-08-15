@@ -906,10 +906,10 @@ namespace net.fushizen.attachable
 
         void InitAnimator()
         {
-            if (anim_onTrack.Equals("")) anim_onTrack = null;
-            if (anim_onTrackLocal.Equals("")) anim_onTrackLocal = null;
-            if (anim_onHeld.Equals("")) anim_onHeld = null;
-            if (anim_onHeldLocal.Equals("")) anim_onHeldLocal = null;
+            if ("".Equals(anim_onTrack)) anim_onTrack = null;
+            if ("".Equals(anim_onTrackLocal)) anim_onTrackLocal = null;
+            if ("".Equals(anim_onHeld)) anim_onHeld = null;
+            if ("".Equals(anim_onHeldLocal)) anim_onHeldLocal = null;
         }
 
         void _a_SyncAnimator()
