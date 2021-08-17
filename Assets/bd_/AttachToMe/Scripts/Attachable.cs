@@ -192,11 +192,18 @@ namespace net.fushizen.attachable
 
         void Start()
         {
-            // While we don't rely on initialization being in the right order globally,
-            // we need to bootstrap some source of events, in order to kick off full initialization
-            // when someone picks us up. So, set up the pickup proxy right away.
-
             InitProxyReference();
+            InitAnimator();
+            InitRespawn();
+
+            transitionEndTime = -1;
+
+            sync_targetPlayer = sync_targetBone = -1;
+            sync_pos = t_pickup.localPosition;
+            sync_rot = t_pickup.localRotation;
+            sync_placedBy = "";
+
+            _a_SetPickupPerms();
         }
 
         void InitProxyReference()
@@ -259,10 +266,6 @@ namespace net.fushizen.attachable
             globalTracking._a_Register(this);
 
             InitBoneData();
-            InitAnimator();
-            InitRespawn();
-
-            ClearTracking();
 
             updateLoop.enabled = false;
 
@@ -497,10 +500,7 @@ namespace net.fushizen.attachable
             }
         }
 
-        /// <summary>
-        /// Disables tracking in synced data (but does not actually request serialization)
-        /// </summary>
-        void ClearTracking()
+        void ClearTrackingState()
         {
             transitionEndTime = -1;
 
@@ -508,6 +508,14 @@ namespace net.fushizen.attachable
             sync_pos = t_pickup.localPosition;
             sync_rot = t_pickup.localRotation;
             sync_placedBy = "";
+        }
+
+        /// <summary>
+        /// Disables tracking in synced data (but does not actually request serialization)
+        /// </summary>
+        void ClearTracking()
+        {
+            ClearTrackingState();
 
             SetTrackingEnabled(false);
             _a_SetPickupPerms();
@@ -837,7 +845,6 @@ namespace net.fushizen.attachable
 
         public void _a_SetPickupPerms()
         {
-            if (!CheckInit()) return;
             if (isHeldLocally) return;
 
             if (sync_heldRemote || (sync_targetPlayer >= 0 && !allowAttachPickup && Time.timeSinceLevelLoad >= forcePickupEnabledUntil))
