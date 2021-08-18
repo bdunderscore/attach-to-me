@@ -112,3 +112,8 @@ By default, tutorial guidance will be shown the first time a user picks up a pro
   <figcaption>Disabling the tutorial system</figcaption>
 </figure>
 
+# Troubleshooting
+
+## When props are disabled and enabled, they do not respond to any input (without error logs)
+
+Please make sure you are not setting the props to be inactive immediately after scene load. [Due to an outstanding Udon bug](https://feedback.vrchat.com/vrchat-udon-closed-alpha-bugs/p/1123-udon-objects-with-udon-children-initialize-late-despite-execution-order-ove), marking an object inactive in the same frame as its UdonBehaviours were scheduled to Start can result in the UdonBehaviours entering a broken state permanently. It is however safe if they are initially disabled (ie, already disabled in the editor).

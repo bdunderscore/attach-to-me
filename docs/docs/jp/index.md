@@ -113,3 +113,11 @@ Attachment Directionオブジェクトがボーン選択に指向性を与えま
   <img src="../tutorial off.png">
   <figcaption>チュートリアルを無効化する</figcaption>
 </figure>
+
+# よくある問題
+
+## ON/OFFがついた場合、エラーが出ずに、アタッチオブジェクトが一切反応しない
+
+シーンが読み込んだ直後に非アクティブ化しないようにしてください。[Udonのバグのせいで](https://feedback.vrchat.com/vrchat-udon-closed-alpha-bugs/p/1123-udon-objects-with-udon-children-initialize-late-despite-execution-order-ove)、Startが呼ばれたはずのフレームで非アクティブ化すると永久的に壊れてしまう場合があります。
+
+なお、エディター上で最初から非アクティブになっている場合は問題になりません。

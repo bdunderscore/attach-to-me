@@ -1,11 +1,19 @@
 # Upgrade guide
 
-## 1.0 → 1.1
+## 1.1 → 1.1.1
 
-To upgrade from 1.0 to 1.1:
+To upgrade from 1.1 to 1.1.1, simply import the 1.1.1 unitypackage over the 1.1 package.
 
-* First, ensure that you update [UdonSharp](https://github.com/MerlinVR/UdonSharp/releases) to 0.20.1 or higher.
-* Import the 1.1 unitypackage over the existing 1.0 package. Your scenes should upgrade automatically.
+### Major changes in 1.1.1
+
+* Workarounds for various Udon bugs.
+
+## 1.0 → 1.1.1
+
+To upgrade from 1.0 to 1.1 (or 1.1.1):
+
+* First, ensure that you update [UdonSharp](https://github.com/MerlinVR/UdonSharp/releases) to 0.20.2 or higher.
+* Import the 1.1.1 unitypackage over the existing 1.0 package. Your scenes should upgrade automatically.
 
 ### Major changes in 1.1
 
