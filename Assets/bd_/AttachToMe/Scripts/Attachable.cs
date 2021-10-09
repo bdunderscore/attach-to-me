@@ -381,7 +381,7 @@ namespace net.fushizen.attachable
         /// <summary>
         /// Performs a respawn, if appropriate.
         /// </summary>
-        void PerformRespawn()
+        public void _PerformRespawn()
         {
             Networking.SetOwner(Networking.LocalPlayer, t_pickup.gameObject);
             t_pickup.localPosition = initialPosition;
@@ -431,7 +431,7 @@ namespace net.fushizen.attachable
                 RequestSerialization();
             } else if (sync_scheduledRespawn - Networking.GetServerTimeInMilliseconds() <= 0)
             {
-                PerformRespawn();
+                _PerformRespawn();
             } else
             {
                 ScheduleRespawnCheck();
@@ -446,7 +446,7 @@ namespace net.fushizen.attachable
 
                 if (timeRemaining < 0)
                 {
-                    PerformRespawn();
+                    _PerformRespawn();
                     return;
                 }
 
