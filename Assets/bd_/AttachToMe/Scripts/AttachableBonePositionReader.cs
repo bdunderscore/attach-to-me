@@ -25,6 +25,7 @@ namespace net.fushizen.attachable
     /// Sacrificial class to read bone positions. GetBonePosition can throw exceptions that can't be caught, so this U# script
     /// acts as a try-catch block, with AttachablesGlobalTracking respawning it if necessary.
     /// </summary>
+    [DefaultExecutionOrder(-99)]
     public class AttachableBonePositionReader : UdonSharpBehaviour
     {
         public Vector3[] positions;

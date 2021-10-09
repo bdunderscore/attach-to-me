@@ -27,6 +27,7 @@ namespace net.fushizen.attachable
     /// 
     /// I should probably rename this sometime (need to figure out how to make that upgrade path work...)
     /// </summary>
+    [DefaultExecutionOrder(-10)]
     public class AttachablesGlobalOnHold : UdonSharpBehaviour
     {
         public Animator desktopTutorial;

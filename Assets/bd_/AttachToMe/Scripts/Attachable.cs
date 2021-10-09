@@ -30,6 +30,7 @@ using UnityEditor;
 namespace net.fushizen.attachable
 {
     [UdonBehaviourSyncMode(BehaviourSyncMode.Manual)]
+    [DefaultExecutionOrder(0)]
     public class Attachable : UdonSharpBehaviour
     {
         #region Inspector fields

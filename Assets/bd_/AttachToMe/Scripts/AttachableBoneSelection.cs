@@ -24,6 +24,7 @@ namespace net.fushizen.attachable {
     /// <summary>
     /// Handles searching and selecting candidate bones while an attachable is held.
     /// </summary>
+    [DefaultExecutionOrder(-10)]
     public class AttachableBoneSelection : UdonSharpBehaviour
     {
         /// <summary>

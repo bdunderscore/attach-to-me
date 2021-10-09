@@ -35,6 +35,7 @@ namespace net.fushizen.attachable
     /// resulting in sift-up or sift-down operations. As bones are selected with trigger, we'll mark those bone IDs as
     /// forbidden and skip them on future updates.
     /// </summary>
+    [DefaultExecutionOrder(-50)]
     public class AttachableInternalBoneHeap : UdonSharpBehaviour
     {
         int boneCount;
@@ -54,8 +55,13 @@ namespace net.fushizen.attachable
             _a_Reset();
         }
 
+        private void Start()
+        {
+            _a_CheckInit();
+        }
+
         #region Public API
-        
+
         [HideInInspector]
         public int bestPlayerId, bestBoneId;
 

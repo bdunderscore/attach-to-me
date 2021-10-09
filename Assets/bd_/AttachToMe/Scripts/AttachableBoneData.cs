@@ -24,7 +24,7 @@ namespace net.fushizen.attachable
     /// <summary>
     /// Holds static tables of bone relationship data.
     /// </summary>
-   
+    [DefaultExecutionOrder(-100)]
     public class AttachableBoneData : UdonSharpBehaviour
     {
         bool initDone = false;

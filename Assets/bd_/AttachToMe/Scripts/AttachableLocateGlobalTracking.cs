@@ -21,6 +21,7 @@ using VRC.Udon;
 
 namespace net.fushizen.attachable
 {
+    [DefaultExecutionOrder(-200)]
     public class AttachableLocateGlobalTracking : UdonSharpBehaviour
     {
         void Start()
