@@ -24,7 +24,7 @@ namespace net.fushizen.attachable
 
     public class AttachableVersion : UdonSharpBehaviour
     {
-        readonly string VERSION = "AttachToMe vDEV";
+        readonly string VERSION = "AttachToMe v1.1.2";
 
         void Start()
         {
