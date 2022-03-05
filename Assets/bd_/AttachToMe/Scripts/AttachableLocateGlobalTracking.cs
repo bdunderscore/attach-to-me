@@ -36,7 +36,10 @@ namespace net.fushizen.attachable
                 parent = parent.parent;
             }
 
-            Networking.LocalPlayer.SetPlayerTag("net.fushizen.attachable.GlobalTrackingPath", path);
+            if (Networking.LocalPlayer != null)
+            {
+                Networking.LocalPlayer.SetPlayerTag("net.fushizen.attachable.GlobalTrackingPath", path);                
+            }
         }
     }
 }
