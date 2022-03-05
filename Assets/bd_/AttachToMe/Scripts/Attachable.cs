@@ -386,7 +386,8 @@ namespace net.fushizen.attachable
             Networking.SetOwner(Networking.LocalPlayer, t_pickup.gameObject);
             t_pickup.localPosition = initialPosition;
             t_pickup.localRotation = initialRotation;
-
+            
+            ClearTrackingState();
             ClearRespawnTimer();
             RequestSerialization();
         }
