@@ -14,14 +14,9 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-using System;
-using System.Reflection;
 using UdonSharp;
-using UdonSharpEditor;
-using UnityEditor;
 using UnityEngine;
 using VRC.SDKBase;
-using VRC.Udon;
 
 namespace net.fushizen.attachable
 {
