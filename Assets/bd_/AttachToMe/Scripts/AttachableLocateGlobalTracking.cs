@@ -52,6 +52,8 @@ namespace net.fushizen.attachable
         {
             EditorApplication.delayCall += () =>
             {
+                if (UdonSharpEditorUtility.GetBackingUdonBehaviour(this) != null) return;
+                
                 // If we're running on pre-1.0 UdonSharp, our prefabs are missing the backing U# behaviours initially.
                 // Create them here - but note, because the ConvertToUdonBehaviours method is marked as strict obsolete
                 // in 1.0 we need to call this reflectively.
