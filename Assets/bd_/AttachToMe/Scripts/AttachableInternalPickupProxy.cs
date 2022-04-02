@@ -23,6 +23,7 @@ namespace net.fushizen.attachable
 {
     [AddComponentMenu("Attachable Internal/PickupProxy")]
     [DefaultExecutionOrder(1)]
+    [UdonBehaviourSyncMode(BehaviourSyncMode.NoVariableSync)]
     public class AttachableInternalPickupProxy : UdonSharpBehaviour
     {
         [HideInInspector]

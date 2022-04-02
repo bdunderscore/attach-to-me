@@ -16,35 +16,22 @@
 
 using System.Collections;
 using System.Collections.Generic;
+using UdonSharp;
 using UnityEngine;
 using UnityEditor;
 using UdonSharpEditor;
 using VRC.SDK3.Components;
+using VRC.Udon.Serialization.OdinSerializer;
 
 namespace net.fushizen.attachable {
 
     public class AttachableSetup : MonoBehaviour
     {
-        readonly static string SUPPORT_PREFAB_GUID = "f5b337b5275cec940975dcd0e0d45049";
-
-        // Start is called before the first frame update
-        void Start()
-        {
-
-        }
-
-        // Update is called once per frame
-        void Update()
-        {
-
-        }
-
         [MenuItem("GameObject/[AttachToMe] Make attachable", false, 49)]
         static void GameObjectMenuMakeAttachable(MenuCommand command)
         {
             var target = (GameObject)command.context;
-
-
+            
             MakeAttachable(target);
         }
 
@@ -91,10 +78,14 @@ namespace net.fushizen.attachable {
                 Undo.AddComponent<BoxCollider>(target);
             }
 
+            var pickupProxy = target.GetUdonSharpComponent<AttachableInternalPickupProxy>(); 
             if (target.GetUdonSharpComponent<AttachableInternalPickupProxy>() == null)
             {
-                var component = Undo.AddComponent<AttachableInternalPickupProxy>(target);
-                UdonSharpEditorUtility.ConvertToUdonBehavioursWithUndo(new UdonSharp.UdonSharpBehaviour[] { component });
+                
+                // TODO pre-1.0 compatibility
+                // var component = Undo.AddComponent<AttachableInternalPickupProxy>(target);
+                // UdonSharpEditorUtility.ConvertToUdonBehavioursWithUndo(new UdonSharp.UdonSharpBehaviour[] { component });
+                pickupProxy = AddComponent<AttachableInternalPickupProxy>(target);
             }
 
             var t_target = target.transform;
@@ -119,24 +110,30 @@ namespace net.fushizen.attachable {
             Undo.SetTransformParent(t_target, gameObj.transform, "Attachable setup");
             target.name = "pickup";
 
-            var attachable = gameObj.AddComponent<Attachable>();
+            //var attachable = gameObj.AddComponent<Attachable>();
+            var attachable = AddComponent<Attachable>(gameObj);
 
-            var updateLoop = gameObj.AddComponent<AttachableInternalUpdateLoop>();
+            var updateLoop = AddComponent<AttachableInternalUpdateLoop>(gameObj);
             updateLoop.enabled = false;
-
-            UdonSharpEditor.UdonSharpEditorUtility.ConvertToUdonBehaviours(new UdonSharp.UdonSharpBehaviour[]
-            {
-                attachable,
-                updateLoop
-            });
 
             var config = gameObj.AddComponent<AttachableConfig>();
 
+            //attachable.t_pickup = t_target;
+            //attachable.t_attachmentDirection = directionality.transform;
             config.t_pickup = t_target;
             config.t_attachmentDirection = directionality.transform;
+
             config.SyncAll();
 
             gameObj.SetActive(isActive);
+        }
+        
+        
+        // Pre-1.0 compatibility shim
+        private static T AddComponent<T>(GameObject gameObject)
+            where T: UdonSharpBehaviour
+        {
+            return UdonSharpUndo.AddComponent<T>(gameObject);
         }
     }
 

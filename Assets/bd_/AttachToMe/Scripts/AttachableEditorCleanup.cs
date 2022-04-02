@@ -32,7 +32,7 @@ namespace net.fushizen.attachable
     /// </summary>
     public class AttachableEditorCleanup : MonoBehaviour
     {
-#if UNITY_EDITOR
+#if UNITY_EDITOR && !COMPILER_UDONSHARP
         private void OnValidate()
         {
             EditorApplication.delayCall += () =>
@@ -80,8 +80,12 @@ namespace net.fushizen.attachable
                 {
                     notOrphaned.Add(config.attachable);
                     notOrphaned.Add(config.updateLoop);
-                    notOrphaned.Add(config.postLateUpdateLoop);
                     notOrphaned.Add(config.pickupProxy);
+                }
+                
+                foreach (var config in root.GetComponentsInChildren<Attachable>(true))
+                {
+                    //TODO - update
                 }
             }
 
@@ -89,7 +93,8 @@ namespace net.fushizen.attachable
             {
                 if (!notOrphaned.Contains(target))
                 {
-                    DestroyImmediate(target);
+                    // TODO
+                    //DestroyImmediate(target);
                 }
             }
         }

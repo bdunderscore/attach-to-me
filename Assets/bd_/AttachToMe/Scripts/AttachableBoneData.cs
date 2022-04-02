@@ -45,6 +45,7 @@ namespace net.fushizen.attachable
         }
 
         [HideInInspector]
+[VRC.Udon.Serialization.OdinSerializer.OdinSerialize] /* UdonSharp auto-upgrade: serialization */ 
         public object[] bone_targets; // Actually HumanBodyBone, but Udon doesn't support arrays of those
         [HideInInspector]
         public int[] bone_child; // child to use for bone linearization, or -1 for sphere, or -2 for do not target

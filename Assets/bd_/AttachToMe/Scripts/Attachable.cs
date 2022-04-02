@@ -14,6 +14,7 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+using System;
 using UdonSharp;
 using UnityEngine;
 using VRC.SDKBase;
@@ -24,6 +25,8 @@ using VRC.SDK3.Components;
 #if UNITY_EDITOR
 using UdonSharpEditor;
 using UnityEditor;
+using UnityEditor.Experimental.SceneManagement;
+using UnityEditor.SceneManagement;
 #endif
 
 
@@ -933,5 +936,58 @@ namespace net.fushizen.attachable
 
         #endregion
 
+        #region Editor support
+        
+        internal void OnValidate()
+        {
+#if UNITY_EDITOR && !COMPILER_UDONSHARP
+            if (!AttachableVersion.IS_USHARP_10) return;
+
+            EditorApplication.delayCall += () =>
+            {
+                var hideFlags = AttachableConfig.debugComponentsVisibleInInspector
+                    ? HideFlags.None
+                    : HideFlags.HideInInspector;
+                var isDirty = false;
+
+                if (t_pickup != null)
+                {
+                    var proxy = t_pickup.GetComponent<AttachableInternalPickupProxy>();
+                    if (proxy == null)
+                    {
+                        proxy = t_pickup.gameObject.AddComponent<AttachableInternalPickupProxy>();
+                        isDirty = true;
+                    }
+
+                    proxy.hideFlags = hideFlags;
+                }
+
+                var updateLoop = GetComponent<AttachableInternalUpdateLoop>();
+                if (updateLoop == null)
+                {
+                    isDirty = true;
+                    updateLoop = gameObject.AddComponent<AttachableInternalUpdateLoop>();
+                }
+
+                updateLoop.enabled = false;
+                updateLoop.hideFlags = hideFlags;
+
+                if (isDirty)
+                {
+                    var stage = PrefabStageUtility.GetCurrentPrefabStage();
+                    if (stage != null)
+                    {
+                        EditorSceneManager.MarkSceneDirty(stage.scene);
+                    }
+                    else
+                    {
+                        EditorSceneManager.MarkSceneDirty(gameObject.scene);
+                    }
+                }
+            };
+#endif
+        }
+
+        #endregion
     }
 }

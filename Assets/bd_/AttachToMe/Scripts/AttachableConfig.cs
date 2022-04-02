@@ -22,6 +22,7 @@ using System.Threading.Tasks;
 using UnityEngine;
 using UnityEditor;
 using UnityEngine.SceneManagement;
+using UnityEngine.Serialization;
 using VRC.Udon;
 using VRC.Udon.Common;
 using VRC.Udon.Common.Interfaces;
@@ -33,6 +34,7 @@ using UdonSharpEditor;
 
 namespace net.fushizen.attachable
 {
+#if !COMPILER_UDONSHARP
     /// <summary>
     /// This component acts as the authoritative source for configuration for attachables. By taking this configuration into our hands, we can
     /// support multi-object editing, ensure that prefabs don't break in future upgrades, and fix missing component references.
@@ -49,7 +51,7 @@ namespace net.fushizen.attachable
         public float range = 2;
         [Range(0, 1)]
         public float directionality = 0;
-        public bool disableFingerTracking;
+        [FormerlySerializedAs("disableFingerTracking")] public bool disableFingerSelection;
 
         public bool perm_removeTracee = true;
         public bool perm_removeOwner = true;
@@ -61,7 +63,8 @@ namespace net.fushizen.attachable
 
         public float respawnTime;
 
-        private static bool debugComponentsVisibleInInspector = false;
+        // TODO: Move to some common class
+        internal static bool debugComponentsVisibleInInspector = false;
 
         // Bound components
         [SerializeField]
@@ -81,6 +84,11 @@ namespace net.fushizen.attachable
                 foreach (var root in scene.GetRootGameObjects())
                 {
                     foreach (var config in root.GetComponentsInChildren<AttachableConfig>(true))
+                    {
+                        config.OnValidate();
+                    }
+                    
+                    foreach (var config in root.GetComponentsInChildren<Attachable>(true))
                     {
                         config.OnValidate();
                     }
@@ -140,6 +148,8 @@ namespace net.fushizen.attachable
             udon.programSource = asset;
             udon.hideFlags = debugComponentsVisibleInInspector ? HideFlags.None : HideFlags.HideInInspector;
         }
+
+        private bool suppressDestroy = false;
 
         // When the config component is destroyed, destroy the child objects.
         private void OnDestroy()
@@ -218,6 +228,14 @@ namespace net.fushizen.attachable
 
             FindReferences();
             SyncAll();
+
+            if (AttachableVersion.IS_USHARP_10)
+            {
+                suppressDestroy = true;
+                attachable.hideFlags = HideFlags.None;
+                EditorUtility.SetDirty(attachable);
+                DestroyImmediate(this);
+            }
         }
 
         public void SyncAll() {
@@ -236,7 +254,7 @@ namespace net.fushizen.attachable
             syncProp(ref anythingChanged, nameof(t_attachmentDirection));
             syncProp(ref anythingChanged, nameof(range));
             syncProp(ref anythingChanged, nameof(directionality));
-            syncProp(ref anythingChanged, nameof(disableFingerTracking));
+            syncProp(ref anythingChanged, nameof(disableFingerSelection));
             syncProp(ref anythingChanged, nameof(perm_removeOther));
             syncProp(ref anythingChanged, nameof(perm_removeOwner));
             syncProp(ref anythingChanged, nameof(perm_removeTracee));
@@ -254,6 +272,7 @@ namespace net.fushizen.attachable
 
             if (anythingChanged)
             {
+                UdonSharpEditorUtility.CopyUdonToProxy(attachable);
                 EditorUtility.SetDirty(attachable);
             }
 
@@ -371,4 +390,5 @@ namespace net.fushizen.attachable
 
 #endif
     }
+#endif // !COMPILER_UDONSHARP
 }

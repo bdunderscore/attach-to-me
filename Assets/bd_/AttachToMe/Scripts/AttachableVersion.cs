@@ -14,10 +14,8 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+using System;
 using UdonSharp;
-using UnityEngine;
-using VRC.SDKBase;
-using VRC.Udon;
 
 namespace net.fushizen.attachable
 {
@@ -25,6 +23,16 @@ namespace net.fushizen.attachable
     public class AttachableVersion : UdonSharpBehaviour
     {
         readonly string VERSION = "AttachToMe v1.1.2";
+#if !COMPILER_UDONSHARP && UNITY_EDITOR
+        public static readonly bool IS_USHARP_10;
+
+        static AttachableVersion()
+        {
+            IS_USHARP_10 = typeof(UdonSharpEditor.UdonSharpEditorUtility)
+                .GetMethod(nameof(UdonSharpEditor.UdonSharpEditorUtility.ConvertToUdonBehavioursWithUndo))
+                ?.GetCustomAttributes(typeof(ObsoleteAttribute), false).Length > 0;
+        }
+#endif
 
         void Start()
         {

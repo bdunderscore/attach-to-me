@@ -24,6 +24,12 @@ namespace net.fushizen.attachable
 {
     [CustomEditor(typeof(AttachableConfig))]
     [CanEditMultipleObjects]
+    class AttachableConfigEditor : AttachableEditor
+    {
+    }
+    
+    [CustomEditor(typeof(Attachable))]
+    [CanEditMultipleObjects]
     class AttachableEditor : Editor
     {
         static bool lang_jp = false;
@@ -37,7 +43,7 @@ namespace net.fushizen.attachable
 
         SerializedProperty m_range;
         SerializedProperty m_directionality;
-        SerializedProperty m_disableFingerTracking;
+        SerializedProperty m_disableFingerSelection;
         SerializedProperty m_respawnTime;
 
         SerializedProperty m_perm_removeTracee;
@@ -161,7 +167,7 @@ namespace net.fushizen.attachable
 
             m_range = serializedObject.FindProperty("range");
             m_directionality = serializedObject.FindProperty("directionality");
-            m_disableFingerTracking = serializedObject.FindProperty("disableFingerTracking");
+            m_disableFingerSelection = serializedObject.FindProperty(nameof(Attachable.disableFingerSelection));
             m_respawnTime = serializedObject.FindProperty("respawnTime");
 
             m_perm_removeTracee = serializedObject.FindProperty("perm_removeTracee");
@@ -264,7 +270,7 @@ namespace net.fushizen.attachable
             if (show_selection)
             {
                 EditorGUILayout.PropertyField(m_directionality, lang.m_directionality);
-                EditorGUILayout.PropertyField(m_disableFingerTracking, lang.m_disableFingerTracking);
+                EditorGUILayout.PropertyField(m_disableFingerSelection, lang.m_disableFingerTracking);
             }
             
             EditorGUILayout.Space();

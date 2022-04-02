@@ -403,7 +403,7 @@ namespace net.fushizen.attachable
 
         public override void OnPlayerLeft(VRCPlayerApi player)
         {
-            if (slotToPlayerId == null) return;
+            if (slotToPlayerId == null || !Utilities.IsValid(player)) return;
 
             // Player tags are cleared before entering this function, so search by ID instead...
             int slot = System.Array.IndexOf(slotToPlayerId, player.playerId);

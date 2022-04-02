@@ -25,7 +25,7 @@ using UnityEditor;
 
 namespace net.fushizen.attachable
 {
-    [UdonBehaviourSyncMode(BehaviourSyncMode.Manual)]
+    [UdonBehaviourSyncMode(BehaviourSyncMode.NoVariableSync)]
     public class AttachableInternalUpdateLoop : UdonSharpBehaviour
     {
         Attachable a;
