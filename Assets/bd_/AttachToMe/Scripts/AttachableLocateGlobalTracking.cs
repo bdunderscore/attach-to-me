@@ -45,36 +45,5 @@ namespace net.fushizen.attachable
                 Networking.LocalPlayer.SetPlayerTag("net.fushizen.attachable.GlobalTrackingPath", path);                
             }
         }
-        
-        #if UNITY_EDITOR && !COMPILER_UDONSHARP
-
-        private void OnValidate()
-        {
-            EditorApplication.delayCall += () =>
-            {
-                if (UdonSharpEditorUtility.GetBackingUdonBehaviour(this) != null) return;
-                
-                // If we're running on pre-1.0 UdonSharp, our prefabs are missing the backing U# behaviours initially.
-                // Create them here - but note, because the ConvertToUdonBehaviours method is marked as strict obsolete
-                // in 1.0 we need to call this reflectively.
-
-                MethodInfo ConvertToUdonBehaviours = typeof(UdonSharpEditorUtility).GetMethod(
-                    nameof(UdonSharpEditorUtility.ConvertToUdonBehaviours),
-                    new[] {typeof(UdonSharpBehaviour[]), typeof(bool)}
-                );
-                if (ConvertToUdonBehaviours.GetCustomAttribute<ObsoleteAttribute>() == null)
-                {
-                    // Pre-1.0 U#
-                    ConvertToUdonBehaviours.Invoke(null,
-                        new object[]
-                        {
-                            gameObject.GetComponentsInChildren<UdonSharpBehaviour>(),
-                            true
-                        });
-                }
-            };
-        }
-
-#endif
     }
 }
