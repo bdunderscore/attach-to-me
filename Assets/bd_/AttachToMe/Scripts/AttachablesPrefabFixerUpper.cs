@@ -48,6 +48,8 @@ namespace net.fushizen.attachable
                 {
                     DestroyImmediate(udonSharpBehaviour);
                 }
+                
+                DestroyImmediate(this);
             };
         }
 
