@@ -48,32 +48,6 @@ namespace net.fushizen.attachable
                 {
                     DestroyImmediate(udonSharpBehaviour);
                 }
-/*
-                EditorApplication.delayCall += () =>
-                {
-
-                    // Clean up duplicate udon behaviours. It seems that these duplicates are created _after_ we destroy
-                    // the originals, so we wait a frame before doing this.
-                    HashSet<(AbstractUdonProgramSource, GameObject)> seen
-                        = new HashSet<(AbstractUdonProgramSource, GameObject)>();
-                    foreach (var udonBehaviour in GetComponentsInChildren<UdonBehaviour>(true))
-                    {
-                        if (seen.Contains((udonBehaviour.programSource, udonBehaviour.gameObject)))
-                        {
-                            Debug.LogWarning(
-                                $"Found duplicate udon behaviour {udonBehaviour.programSource.name} on {udonBehaviour.gameObject.name}");
-                            DestroyImmediate(udonBehaviour);
-                        }
-                        else
-                        {
-                            Debug.LogWarning(
-                                $"Found udon behaviour {udonBehaviour.programSource.name} on {udonBehaviour.gameObject.name}");
-                            seen.Add((udonBehaviour.programSource, udonBehaviour.gameObject));
-                        }
-                    }
-
-                    DestroyImmediate(this);
-                };*/
             };
         }
 
