@@ -42,8 +42,8 @@ namespace net.fushizen.attachable
                 }
                 
                 // If we're running on pre-1.0 UdonSharp, our prefabs are a bit busted, with proxy behaviours
-                // disconnected from their backing udon behaviour. This code deletes the proxy components and prunes
-                // duplicate udon behaviours that might have been created.
+                // disconnected from their backing udon behaviour. This code deletes the proxy components; pre-1.0
+                // U# will automagically recreate them for us.
                 foreach (var udonSharpBehaviour in GetComponentsInChildren<UdonSharpBehaviour>(true))
                 {
                     DestroyImmediate(udonSharpBehaviour);
