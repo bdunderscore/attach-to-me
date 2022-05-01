@@ -1,5 +1,13 @@
 # Upgrade guide
 
+## 1.1.x → 1.2
+
+To upgrade from 1.1 to 1.2, simply import the 1.2 unitypackage over the 1.1 package.
+
+**1.2 now supports the UdonSharp 1.0 beta!**
+* It is strongly recommended to upgrade to Attach-To-Me 1.2 before upgrading to U#1.0. If you did not do so, please delete the `Attachables Controller` 
+object from the scene once manually to avoid issues. 
+
 ## 1.1 → 1.1.1
 
 To upgrade from 1.1 to 1.1.1, simply import the 1.1.1 unitypackage over the 1.1 package.

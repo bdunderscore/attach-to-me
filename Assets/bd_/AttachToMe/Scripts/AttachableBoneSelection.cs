@@ -403,6 +403,7 @@ namespace net.fushizen.attachable {
 
             activeAttachable = attachable;
             currentHand = hand;
+            disableFingerSelection = attachable.disableFingerSelection;
             enabled = true; // start update loop and input monitoring
 
             t_attachmentDirection = attachable.t_attachmentDirection;

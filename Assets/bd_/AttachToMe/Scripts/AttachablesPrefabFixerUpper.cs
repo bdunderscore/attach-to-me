@@ -1,16 +1,10 @@
-﻿using System.Collections;
-using System.Collections.Generic;
-using System.Reflection;
-using UdonSharp;
+﻿using UdonSharp;
 #if UNITY_EDITOR
 using UnityEditor.Experimental.SceneManagement;
 using System;
-using UdonSharpEditor;
 using UnityEditor;
-using VRC.Udon.Editor.ProgramSources;
 #endif
 using UnityEngine;
-using VRC.Udon;
 
 namespace net.fushizen.attachable
 {
@@ -48,7 +42,7 @@ namespace net.fushizen.attachable
                 {
                     DestroyImmediate(udonSharpBehaviour);
                 }
-                
+
                 DestroyImmediate(this);
             };
         }
