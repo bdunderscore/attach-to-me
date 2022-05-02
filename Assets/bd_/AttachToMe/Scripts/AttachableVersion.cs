@@ -22,7 +22,7 @@ namespace net.fushizen.attachable
 
     public class AttachableVersion : UdonSharpBehaviour
     {
-        readonly string VERSION = "AttachToMe v1.1.2";
+        readonly string VERSION = "AttachToMe vSNAPSHOT";
 #if !COMPILER_UDONSHARP && UNITY_EDITOR
         public static readonly bool IS_USHARP_10;
 
