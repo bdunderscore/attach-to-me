@@ -23,7 +23,7 @@ jobs:
         run: |
           VERSION=${GITHUB_REF/refs\/tags\//}
           echo ::set-output name=version::$VERSION
-          sed -i -e "s/SNAPSHOT/$VERSION/" Assets/bd_/AttachToMe/Scripts/AttachableVersion.cs
+          sed -i -e "s/vSNAPSHOT/$VERSION/" Assets/bd_/AttachToMe/Scripts/AttachableVersion.cs
       - name: Build unitypackage
         uses: pCYSl5EDgo/create-unitypackage@2f4ac82dabd3a1029f7a6771f30dc796e4217551
         with:
